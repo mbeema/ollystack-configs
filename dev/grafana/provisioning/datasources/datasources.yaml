@@ -1,0 +1,42 @@
+# =============================================================================
+# Grafana Datasource Provisioning
+# =============================================================================
+# Auto-provisions Jaeger and Prometheus datasources for the dev stack.
+# =============================================================================
+
+apiVersion: 1
+
+deleteDatasources: []
+
+datasources:
+  # Jaeger - Distributed Tracing
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    isDefault: false
+    editable: true
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: ""
+      tracesToMetrics:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+
+  # Prometheus - Metrics
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      exemplarTraceIdDestinations:
+        - name: traceID
+          datasourceUid: jaeger
+      incrementalQuerying: true
+      incrementalQueryOverlapWindow: 10m

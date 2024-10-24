@@ -1,0 +1,123 @@
+# =============================================================================
+# OllyStack - Local Development Stack
+# =============================================================================
+# Usage:
+#   docker compose up -d        # Start all services
+#   docker compose down          # Stop all services
+#   docker compose logs -f       # Follow logs
+#
+# Endpoints:
+#   OTel Collector gRPC:   localhost:4317
+#   OTel Collector HTTP:   localhost:4318
+#   Jaeger UI:             localhost:16686
+#   Prometheus:            localhost:9090
+#   Grafana:               localhost:3000 (anonymous auth enabled)
+#   Collector Health:      localhost:13133
+#   Collector Metrics:     localhost:8888
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # OpenTelemetry Collector
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: ollystack-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel/otel-collector-dev.yaml"]
+    volumes:
+      - ./otel-collector-dev.yaml:/etc/otel/otel-collector-dev.yaml:ro
+    ports:
+      - "4317:4317"     # OTLP gRPC receiver
+      - "4318:4318"     # OTLP HTTP receiver
+      - "13133:13133"   # Health check extension
+      - "8888:8888"     # Collector internal metrics
+      - "8889:8889"     # Prometheus exporter metrics
+    networks:
+      - ollystack-net
+    depends_on:
+      - jaeger
+
+  # ---------------------------------------------------------------------------
+  # Jaeger - Distributed Tracing Backend
+  # ---------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ollystack-jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "14250:14250"   # gRPC model.proto
+    networks:
+      - ollystack-net
+    volumes:
+      - jaeger-data:/badger
+
+  # ---------------------------------------------------------------------------
+  # Prometheus - Metrics Backend
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ollystack-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - ollystack-net
+
+  # ---------------------------------------------------------------------------
+  # Grafana - Visualization & Dashboards
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ollystack-grafana
+    restart: unless-stopped
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - ollystack-net
+    depends_on:
+      - prometheus
+      - jaeger
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  ollystack-net:
+    driver: bridge
+    name: ollystack-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  jaeger-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

@@ -1,0 +1,34 @@
+# =============================================================================
+# Prometheus Configuration - Development
+# =============================================================================
+# Scrapes metrics from the OpenTelemetry Collector:
+#   - :8888  Collector internal metrics (process, runtime, pipeline stats)
+#   - :8889  Prometheus exporter metrics (application telemetry)
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # OTel Collector internal metrics
+  - job_name: "otel-collector-internal"
+    static_configs:
+      - targets: ["otel-collector:8888"]
+        labels:
+          component: "otel-collector"
+          metrics_source: "internal"
+
+  # OTel Collector Prometheus exporter (application metrics forwarded through collector)
+  - job_name: "otel-collector-exporter"
+    static_configs:
+      - targets: ["otel-collector:8889"]
+        labels:
+          component: "otel-collector"
+          metrics_source: "exporter"
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
