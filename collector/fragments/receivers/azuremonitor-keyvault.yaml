@@ -1,0 +1,31 @@
+# Azure Monitor Receiver — Key Vault
+# Pulls metrics from Azure Key Vault via Azure Monitor API.
+# Covers API hit/miss, latency, availability, and saturation.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-keyvault.yaml
+receivers:
+  azuremonitor/keyvault:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.KeyVault/vaults
+            metrics:
+              # --- API Requests ---
+              - name: ServiceApiHit
+              - name: ServiceApiResult
+              - name: ServiceApiLatency
+
+              # --- Availability ---
+              - name: Availability
+
+              # --- Saturation ---
+              - name: SaturationShoebox

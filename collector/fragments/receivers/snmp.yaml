@@ -1,0 +1,41 @@
+# SNMP Receiver
+# Collects metrics from network devices via SNMP (v1, v2c, v3).
+# Monitors routers, switches, firewalls, printers, and other SNMP-enabled devices.
+#
+# Supports SNMP GET, WALK, and table-based collection with configurable OIDs.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=snmp.yaml
+receivers:
+  snmp:
+    collection_interval: ${SNMP_INTERVAL:-60s}
+    endpoint: ${SNMP_ENDPOINT:-udp://localhost:161}
+    version: ${SNMP_VERSION:-v2c}
+    community: ${SNMP_COMMUNITY:-public}
+    # SNMPv3 authentication (uncomment if using v3)
+    # security_level: ${SNMP_SECURITY_LEVEL:-authPriv}
+    # user: ${SNMP_USER}
+    # auth_type: ${SNMP_AUTH_TYPE:-SHA}
+    # auth_password: ${SNMP_AUTH_PASSWORD}
+    # privacy_type: ${SNMP_PRIVACY_TYPE:-AES}
+    # privacy_password: ${SNMP_PRIVACY_PASSWORD}
+    metrics:
+      # System uptime
+      system.uptime:
+        unit: "s"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.2.1.1.3.0"
+      # Interface metrics (table-based)
+      interface.traffic.in:
+        unit: "By"
+        sum:
+          value_type: int
+          aggregation: cumulative
+          monotonic: true
+        column_oids:
+          - oid: "1.3.6.1.2.1.2.2.1.10"
+            attributes:
+              - name: interface
+                value: "1.3.6.1.2.1.2.2.1.2"

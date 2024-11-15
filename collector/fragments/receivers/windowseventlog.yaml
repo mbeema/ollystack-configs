@@ -1,0 +1,17 @@
+# Windows Event Log Receiver
+# Collects events from Windows Event Log channels.
+# Monitors System, Application, Security, and custom event channels.
+#
+# Required: Windows OS. Collector must run with appropriate permissions
+# to read the requested event channels.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=windowseventlog.yaml
+receivers:
+  windowseventlog:
+    channel: ${WINDOWS_EVENT_CHANNEL:-System}
+    # Additional channels can be configured with named instances:
+    # windowseventlog/application:
+    #   channel: Application
+    # windowseventlog/security:
+    #   channel: Security

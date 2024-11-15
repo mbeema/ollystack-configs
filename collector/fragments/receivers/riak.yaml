@@ -1,0 +1,12 @@
+# Riak Receiver
+# Collects performance metrics from Riak KV distributed database.
+# Monitors node health, vnode operations, read/write latencies, and ring status.
+#
+# Required: HTTP access to Riak's /stats endpoint (port 8098 by default).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=riak.yaml
+receivers:
+  riak:
+    endpoint: ${RIAK_ENDPOINT:-http://localhost:8098}
+    collection_interval: ${RIAK_INTERVAL:-60s}

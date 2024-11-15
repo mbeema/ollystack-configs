@@ -1,0 +1,32 @@
+# Transform processor for traces - modify span attributes, set status, enrich data.
+# Uses OTTL (OpenTelemetry Transformation Language) statements.
+processors:
+  transform/traces:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # Set span status to ERROR when HTTP status code indicates a server error
+          - set(status.code, STATUS_CODE_ERROR) where attributes["http.status_code"] != nil and attributes["http.status_code"] >= 500
+          - set(status.message, "Server Error") where attributes["http.status_code"] != nil and attributes["http.status_code"] >= 500
+
+          # Normalize HTTP method to uppercase
+          - replace_pattern(attributes["http.method"], ".*", "GET") where attributes["http.method"] == "get"
+          - replace_pattern(attributes["http.method"], ".*", "POST") where attributes["http.method"] == "post"
+
+          # Truncate long attribute values to reduce payload size
+          - truncate_all(attributes, 512)
+
+          # Add deployment environment to all spans
+          - set(attributes["deployment.environment"], "${DEPLOYMENT_ENVIRONMENT:-production}")
+
+          # Remove sensitive query parameters from URLs
+          - replace_pattern(attributes["http.url"], "\\?.*", "") where attributes["http.url"] != nil
+
+          # Set a default span name for unnamed spans
+          - set(name, "unknown") where name == ""
+
+      - context: spanevent
+        statements:
+          # Truncate exception stacktraces to reduce storage
+          - truncate_all(attributes, 2048)

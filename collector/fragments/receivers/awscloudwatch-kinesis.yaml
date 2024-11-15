@@ -1,0 +1,150 @@
+# AWS CloudWatch Receiver — Kinesis Data Streams
+# Pulls Kinesis stream and shard metrics from CloudWatch.
+# Covers throughput, iterator age, put/get records, and throttling.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where Kinesis streams reside
+#
+# Note: Enable enhanced (shard-level) monitoring in Kinesis for per-shard
+# metrics. Basic monitoring provides stream-level metrics every 5 minutes.
+# Enhanced monitoring provides shard-level metrics every 1 minute.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-kinesis.yaml
+receivers:
+  awscloudwatch/kinesis:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # Kinesis Data Streams — Basic Monitoring
+        # -----------------------------------------------------------------
+        - namespace: AWS/Kinesis
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Incoming Data ---
+            - metric_name: IncomingRecords
+              statistics:
+                - Sum
+            - metric_name: IncomingBytes
+              statistics:
+                - Sum
+            - metric_name: PutRecord.Success
+              statistics:
+                - Average
+                - Sum
+            - metric_name: PutRecords.Success
+              statistics:
+                - Average
+                - Sum
+            - metric_name: PutRecords.TotalRecords
+              statistics:
+                - Sum
+            - metric_name: PutRecords.SuccessfulRecords
+              statistics:
+                - Sum
+            - metric_name: PutRecords.FailedRecords
+              statistics:
+                - Sum
+            - metric_name: PutRecords.ThrottledRecords
+              statistics:
+                - Sum
+            - metric_name: PutRecord.Bytes
+              statistics:
+                - Sum
+            - metric_name: PutRecords.Bytes
+              statistics:
+                - Sum
+
+            # --- Latency ---
+            - metric_name: PutRecord.Latency
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: PutRecords.Latency
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: GetRecords.Latency
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Outgoing Data ---
+            - metric_name: GetRecords.Records
+              statistics:
+                - Sum
+            - metric_name: GetRecords.Bytes
+              statistics:
+                - Sum
+            - metric_name: GetRecords.Success
+              statistics:
+                - Sum
+
+            # --- Iterator Age (critical for consumer lag alerting) ---
+            - metric_name: GetRecords.IteratorAgeMilliseconds
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Throughput Exceeded ---
+            - metric_name: ReadProvisionedThroughputExceeded
+              statistics:
+                - Sum
+                - Average
+            - metric_name: WriteProvisionedThroughputExceeded
+              statistics:
+                - Sum
+                - Average
+
+            # --- Enhanced Fan-Out (EFO) ---
+            - metric_name: SubscribeToShard.Success
+              statistics:
+                - Sum
+            - metric_name: SubscribeToShardEvent.Bytes
+              statistics:
+                - Sum
+            - metric_name: SubscribeToShardEvent.MillisBehindLatest
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: SubscribeToShardEvent.Records
+              statistics:
+                - Sum
+
+        # -----------------------------------------------------------------
+        # Kinesis Data Firehose (if applicable)
+        # -----------------------------------------------------------------
+        - namespace: AWS/Firehose
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            - metric_name: DeliveryToS3.Records
+              statistics:
+                - Sum
+            - metric_name: DeliveryToS3.DataFreshness
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: DeliveryToS3.Success
+              statistics:
+                - Average
+            - metric_name: IncomingRecords
+              statistics:
+                - Sum
+            - metric_name: IncomingBytes
+              statistics:
+                - Sum
+            - metric_name: FailedConversion.Records
+              statistics:
+                - Sum
+            - metric_name: FailedConversion.Bytes
+              statistics:
+                - Sum
+            - metric_name: ThrottledRecords
+              statistics:
+                - Sum

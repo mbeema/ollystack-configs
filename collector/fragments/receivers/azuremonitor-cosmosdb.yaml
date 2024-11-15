@@ -1,0 +1,70 @@
+# Azure Monitor Receiver — Cosmos DB
+# Pulls metrics from Azure Cosmos DB via Azure Monitor API.
+# Covers RU consumption, throttling, availability, latency, and storage.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-cosmosdb.yaml
+receivers:
+  azuremonitor/cosmosdb:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.DocumentDB/databaseAccounts
+            metrics:
+              # --- Request Units ---
+              - name: TotalRequestUnits
+              - name: NormalizedRUConsumption
+              - name: ProvisionedThroughput
+              - name: AutoscaleMaxThroughput
+
+              # --- Request Counts & Throttling ---
+              - name: TotalRequests
+              - name: MetadataRequests
+              - name: MongoRequests
+              - name: CassandraRequests
+              - name: GremlinRequests
+              - name: SqlContainerDelete
+              - name: SqlContainerCreate
+              # HTTP 429 (throttled) — filter by StatusCode dimension
+              - name: TotalRequestUnits
+
+              # --- Availability ---
+              - name: ServiceAvailability
+
+              # --- Latency ---
+              - name: ServerSideLatency
+              - name: ReplicationLatency
+
+              # --- Storage ---
+              - name: DataUsage
+              - name: IndexUsage
+              - name: DocumentQuota
+              - name: DocumentCount
+              - name: AvailableStorage
+
+              # --- Connections ---
+              - name: MongoRequestCharge
+
+              # --- Dedicated Gateway (Integrated Cache) ---
+              - name: DedicatedGatewayRequests
+              - name: IntegratedCacheItemHitRate
+              - name: IntegratedCacheQueryHitRate
+              - name: IntegratedCacheEvictedEntriesSize
+
+              # --- Change Feed ---
+              - name: ChangeFeedEstimatedPendingChanges
+
+              # --- Cassandra Connector ---
+              - name: CassandraConnectionClosures
+              - name: CassandraConnectorAvgReplicationLatency
+              - name: CassandraKeyspaceDelete
+              - name: CassandraKeyspaceCreate
+              - name: CassandraKeyspaceThroughputUpdate

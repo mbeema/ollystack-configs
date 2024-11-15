@@ -1,0 +1,28 @@
+# AWS CloudWatch Logs Exporter
+# Ships OpenTelemetry logs to Amazon CloudWatch Logs.
+# Log group and stream are parameterized for multi-environment deployments.
+
+exporters:
+  awscloudwatchlogs:
+    # CloudWatch Logs destination
+    log_group_name: ${CW_LOG_GROUP_NAME}
+    log_stream_name: ${CW_LOG_STREAM_NAME}
+    region: ${AWS_REGION}
+
+    # Optional IAM role for cross-account log delivery
+    role_arn: ${CW_LOGS_ROLE_ARN:-""}
+
+    # Formatting — "json/emf" for structured, "raw" for plain text
+    raw_log: false
+
+    # Retry and queue settings for reliability
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

@@ -1,0 +1,59 @@
+# Milvus Vector Database Receiver (via Prometheus scrape)
+# Scrapes metrics from Milvus, the open-source vector database for
+# AI/ML similarity search and RAG (Retrieval-Augmented Generation) pipelines.
+#
+# Covers: query latency, search QPS, index build status, memory usage,
+# segment health, collection stats, and gRPC request metrics.
+#
+# Also applicable to other vector databases with Prometheus endpoints:
+#   Qdrant:   port 6333 /metrics (or Prometheus exporter)
+#   Weaviate: port 2112 /metrics
+#   ChromaDB: via custom exporter
+#
+# Milvus exposes metrics on port 9091 by default.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=milvus.yaml
+receivers:
+  prometheus/milvus:
+    config:
+      scrape_configs:
+        - job_name: milvus
+          scrape_interval: ${MILVUS_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${MILVUS_TARGETS:-["localhost:9091"]}
+              labels:
+                component: vector-database
+                db.system: milvus
+          # Kubernetes: discover Milvus pods
+          # kubernetes_sd_configs:
+          #   - role: pod
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          #     action: keep
+          #     regex: milvus
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "milvus_(query_node_search_latency_bucket|query_node_search_latency_sum|query_node_search_latency_count|query_node_sq_req_count|query_node_sq_req_latency_bucket|proxy_search_vectors_count|proxy_insert_vectors_count|proxy_mutation_send_latency_bucket|proxy_sq_latency_bucket|proxy_sq_latency_sum|proxy_sq_latency_count|data_node_flush_buffer_op_count|data_node_consume_msg_count|index_node_build_index_latency_bucket|rootcoord_collection_num|rootcoord_entity_num|datacoord_stored_rows_num|datacoord_segment_num|querycoord_loaded_collection_num|querycoord_loaded_segment_num)"
+
+        # Optional: Qdrant vector database
+        # - job_name: qdrant
+        #   scrape_interval: 30s
+        #   metrics_path: /metrics
+        #   static_configs:
+        #     - targets: ${QDRANT_TARGETS:-["localhost:6333"]}
+        #       labels:
+        #         component: vector-database
+        #         db.system: qdrant
+
+        # Optional: Weaviate vector database
+        # - job_name: weaviate
+        #   scrape_interval: 30s
+        #   metrics_path: /v1/meta
+        #   static_configs:
+        #     - targets: ${WEAVIATE_TARGETS:-["localhost:2112"]}
+        #       labels:
+        #         component: vector-database
+        #         db.system: weaviate

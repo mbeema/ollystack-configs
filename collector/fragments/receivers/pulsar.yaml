@@ -1,0 +1,13 @@
+# Apache Pulsar Receiver
+# Consumes telemetry data from Apache Pulsar topics.
+# Supports traces, metrics, and logs consumption from Pulsar.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=pulsar.yaml
+receivers:
+  pulsar:
+    endpoint: ${PULSAR_ENDPOINT:-pulsar://localhost:6650}
+    topic: ${PULSAR_TOPIC:-persistent://public/default/otlp-spans}
+    subscription: ${PULSAR_SUBSCRIPTION:-otel-collector}
+    encoding: ${PULSAR_ENCODING:-otlp_proto}
+    consumer_name: ${PULSAR_CONSUMER_NAME:-otel-collector}

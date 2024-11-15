@@ -1,0 +1,56 @@
+# Google Cloud Monitoring Receiver — Core (Compute Engine basic, Cloud SQL basic, GKE basic, LB basic)
+# Pulls metrics from Google Cloud Monitoring (formerly Stackdriver).
+# Requires a service account with roles/monitoring.viewer permission.
+#
+# This is the base receiver with common metrics across core services.
+# For comprehensive per-service coverage, compose with the dedicated fragments:
+#
+#   googlecloudmonitoring-cloudsql.yaml       — Cloud SQL (MySQL, PostgreSQL, SQL Server)
+#   googlecloudmonitoring-spanner.yaml        — Cloud Spanner (CPU, storage, transactions)
+#   googlecloudmonitoring-cloudrun.yaml       — Cloud Run (requests, CPU, memory, instances)
+#   googlecloudmonitoring-cloudfunctions.yaml  — Cloud Functions (executions, duration, memory)
+#   googlecloudmonitoring-pubsub.yaml         — Pub/Sub (throughput, backlog, oldest unacked)
+#   googlecloudmonitoring-bigquery.yaml       — BigQuery (queries, slots, storage, streaming)
+#   googlecloudmonitoring-gke.yaml            — GKE (container, node, pod, autoscaler)
+#   googlecloudmonitoring-cloudstorage.yaml   — Cloud Storage / GCS (requests, bytes, objects)
+#   googlecloudmonitoring-memorystore.yaml    — Memorystore Redis & Memcached
+#   googlecloudmonitoring-dataflow.yaml       — Dataflow (jobs, elements, watermark, slots)
+#   googlecloudmonitoring-cloudtasks.yaml     — Cloud Tasks (queue depth, attempts, latency)
+#   googlecloudmonitoring-loadbalancing.yaml  — Cloud Load Balancing (HTTPS, TCP/SSL, Internal)
+#   googlecloudmonitoring-computeengine.yaml  — Compute Engine enhanced (disk IOPS, guest agent)
+#   googlecloudmonitoring-filestore.yaml      — Filestore / NFS (capacity, IOPS, throughput)
+#
+# Example (compose multiple fragments):
+#   otelcol --config=base.yaml \
+#           --config=googlecloud.yaml \
+#           --config=googlecloudmonitoring-cloudsql.yaml \
+#           --config=googlecloudmonitoring-pubsub.yaml \
+#           --config=googlecloudmonitoring-cloudrun.yaml
+
+receivers:
+  googlecloudmonitoring:
+    # GCP project ID to read metrics from
+    project_id: ${GCP_PROJECT_ID}
+    # How often to poll for new metric data
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    # Metric type prefixes to collect (GCP metric descriptors)
+    metrics_list:
+      # Compute Engine VM metrics (basic — see googlecloudmonitoring-computeengine.yaml for full)
+      - metric_name: compute.googleapis.com/instance/cpu/utilization
+      - metric_name: compute.googleapis.com/instance/memory/balloon/ram_used
+      - metric_name: compute.googleapis.com/instance/disk/read_bytes_count
+      - metric_name: compute.googleapis.com/instance/disk/write_bytes_count
+      - metric_name: compute.googleapis.com/instance/network/received_bytes_count
+      - metric_name: compute.googleapis.com/instance/network/sent_bytes_count
+      # Cloud SQL metrics (basic — see googlecloudmonitoring-cloudsql.yaml for full)
+      - metric_name: cloudsql.googleapis.com/database/cpu/utilization
+      - metric_name: cloudsql.googleapis.com/database/memory/utilization
+      - metric_name: cloudsql.googleapis.com/database/disk/utilization
+      # GKE container metrics (basic — see googlecloudmonitoring-gke.yaml for full)
+      - metric_name: kubernetes.io/container/cpu/core_usage_time
+      - metric_name: kubernetes.io/container/memory/used_bytes
+      # Cloud Load Balancing metrics (basic — see googlecloudmonitoring-loadbalancing.yaml for full)
+      - metric_name: loadbalancing.googleapis.com/https/request_count
+      - metric_name: loadbalancing.googleapis.com/https/total_latencies
+    # Optional: credentials file path (defaults to GOOGLE_APPLICATION_CREDENTIALS)
+    # credentials_file: ${GOOGLE_APPLICATION_CREDENTIALS}

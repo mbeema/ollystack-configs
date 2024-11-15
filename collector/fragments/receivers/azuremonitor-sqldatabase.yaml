@@ -1,0 +1,85 @@
+# Azure Monitor Receiver — SQL Database & SQL Managed Instance
+# Pulls metrics from Azure SQL Database and Managed Instance via Azure Monitor API.
+# Covers DTU/vCore consumption, storage, connections, deadlocks, and replicas.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-sqldatabase.yaml
+receivers:
+  azuremonitor/sqldatabase:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          # -----------------------------------------------------------------
+          # Azure SQL Database (single, elastic pool, hyperscale)
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Sql/servers/databases
+            metrics:
+              # CPU & Compute
+              - name: cpu_percent
+              - name: dtu_consumption_percent
+              - name: dtu_used
+              - name: sqlserver_process_core_percent
+              # Memory
+              - name: physical_data_read_percent
+              - name: log_write_percent
+              # Storage
+              - name: storage_percent
+              - name: storage
+              - name: allocated_data_storage
+              - name: tempdb_data_size
+              - name: tempdb_log_size
+              - name: tempdb_log_used_percent
+              # Connections
+              - name: connection_successful
+              - name: connection_failed
+              - name: blocked_by_firewall
+              - name: sessions_percent
+              - name: workers_percent
+              # Query Performance
+              - name: deadlock
+              - name: xtp_storage_percent
+              - name: sql_instance_cpu_percent
+              - name: sql_instance_memory_percent
+              # IO
+              - name: dwu_consumption_percent
+              - name: dwu_used
+              # Replication (Geo-replication & Hyperscale)
+              - name: replication_lag_sec
+
+          # -----------------------------------------------------------------
+          # Azure SQL Elastic Pool
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Sql/servers/elasticPools
+            metrics:
+              - name: cpu_percent
+              - name: dtu_consumption_percent
+              - name: physical_data_read_percent
+              - name: log_write_percent
+              - name: storage_percent
+              - name: sessions_percent
+              - name: workers_percent
+              - name: eDTU_used
+              - name: storage_used
+              - name: allocated_data_storage
+              - name: allocated_data_storage_percent
+
+          # -----------------------------------------------------------------
+          # Azure SQL Managed Instance
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Sql/managedInstances
+            metrics:
+              - name: avg_cpu_percent
+              - name: io_requests
+              - name: io_bytes_read
+              - name: io_bytes_written
+              - name: reserved_storage_mb
+              - name: storage_space_used_mb
+              - name: virtual_core_count

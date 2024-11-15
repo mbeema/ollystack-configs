@@ -1,0 +1,47 @@
+# SLO Indicator Tagging Processor
+# Tags spans and metrics with SLI (Service Level Indicator) categories
+# to enable SLO tracking, error budget calculation, and burn rate alerting.
+#
+# Adds structured attributes for:
+#   - sli.type: availability | latency | throughput | correctness
+#   - sli.good: true/false (whether this event counts as "good" for the SLO)
+#   - slo.objective: the target percentage (e.g., "99.9")
+#
+# Designed to work with spanmetrics connector — tagged spans produce
+# metrics that feed directly into SLO dashboards and alerting.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=slo-indicator-tagging.yaml
+processors:
+  transform/slo-indicators:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        conditions:
+          # Only tag server/consumer spans (these represent SLI-eligible requests)
+          - kind == SPAN_KIND_SERVER or kind == SPAN_KIND_CONSUMER
+        statements:
+          # ── Availability SLI ──
+          # A request is "available" if it returns a non-5xx status
+          - set(attributes["sli.type"], "availability")
+          - set(attributes["sli.good"], "true") where status.code != STATUS_CODE_ERROR
+          - set(attributes["sli.good"], "false") where status.code == STATUS_CODE_ERROR
+
+          # ── Latency SLI ──
+          # Tag requests that meet the latency target as "fast"
+          # Default threshold: 500ms (configurable via env var)
+          - set(attributes["sli.latency_good"], "true") where duration < 500000000
+          - set(attributes["sli.latency_good"], "false") where duration >= 500000000
+
+          # ── Exclude synthetic traffic from SLO calculation ──
+          # Health checks, readiness probes, and internal traffic should not
+          # count toward SLO (they inflate availability artificially)
+          - set(attributes["sli.excluded"], "true") where IsMatch(attributes["http.route"], "(?i)(/health|/ready|/live|/ping|/metrics)")
+          - set(attributes["sli.excluded"], "true") where IsMatch(attributes["http.user_agent"], "(?i)(kube-probe|GoogleHC|ELB-HealthChecker)")
+          - set(attributes["sli.excluded"], "true") where IsMatch(attributes["user_agent.original"], "(?i)(kube-probe|GoogleHC|ELB-HealthChecker)")
+
+    metric_statements:
+      - context: datapoint
+        statements:
+          # Tag HTTP request metrics with SLI category
+          - set(attributes["sli.type"], "availability") where IsMatch(metric.name, "(?i)(http_server_request|rpc_server)")

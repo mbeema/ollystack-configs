@@ -1,0 +1,26 @@
+# LogicMonitor Exporter
+# Exports traces and logs to LogicMonitor's platform.
+# LogicMonitor provides infrastructure monitoring, APM, and log intelligence.
+#
+# Supports: traces, logs
+#
+# Required env vars:
+#   LOGICMONITOR_ENDPOINT - LogicMonitor REST API URL (e.g., https://<company>.logicmonitor.com/rest)
+#   LOGICMONITOR_API_KEY  - LogicMonitor API bearer token
+#
+# Usage:
+#   otelcol --config=base.yaml --config=logicmonitor.yaml
+exporters:
+  logicmonitor:
+    endpoint: ${LOGICMONITOR_ENDPOINT}
+    headers:
+      Authorization: Bearer ${LOGICMONITOR_API_KEY}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

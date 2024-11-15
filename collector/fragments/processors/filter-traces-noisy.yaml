@@ -1,0 +1,38 @@
+# Noisy Trace Filter
+# Drops low-value spans that inflate trace storage without adding
+# debugging or observability value. Use alongside filter/traces (health checks).
+#
+# Typical savings: 15-30% trace volume reduction.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=filter-traces-noisy.yaml
+processors:
+  filter/traces-noisy:
+    error_mode: ignore
+    traces:
+      span:
+        # ── Static assets and browser noise ──
+        - 'attributes["http.target"] != nil and IsMatch(attributes["http.target"], "\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|map)$")'
+        - 'attributes["url.path"] != nil and IsMatch(attributes["url.path"], "\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|map)$")'
+
+        # ── Favicon and robots ──
+        - 'attributes["http.target"] == "/favicon.ico"'
+        - 'attributes["http.target"] == "/robots.txt"'
+        - 'attributes["url.path"] == "/favicon.ico"'
+        - 'attributes["url.path"] == "/robots.txt"'
+
+        # ── CORS preflight requests ──
+        - 'attributes["http.method"] == "OPTIONS"'
+        - 'attributes["http.request.method"] == "OPTIONS"'
+
+        # ── Kubernetes internal traffic ──
+        - 'attributes["http.user_agent"] != nil and IsMatch(attributes["http.user_agent"], "(?i)(kube-probe|prometheus|telegraf)")'
+
+        # ── Metrics scraping endpoints ──
+        - 'attributes["http.target"] == "/metrics"'
+        - 'attributes["http.target"] == "/debug/pprof"'
+        - 'attributes["url.path"] == "/metrics"'
+
+        # ── Short internal spans (< 1ms, likely just instrumentation noise) ──
+        # Uncomment to drop very fast spans:
+        # - 'duration < 1000000'  # 1ms in nanoseconds

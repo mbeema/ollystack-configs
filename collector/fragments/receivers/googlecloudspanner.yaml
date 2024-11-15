@@ -1,0 +1,23 @@
+# Google Cloud Spanner Receiver
+# Collects detailed Spanner performance metrics directly from the Spanner API.
+# Provides more granular metrics than Cloud Monitoring, including top-N queries,
+# lock statistics, and transaction statistics.
+#
+# Required: roles/spanner.viewer or roles/spanner.databaseReader
+# Required: GOOGLE_APPLICATION_CREDENTIALS or Workload Identity
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudspanner.yaml
+receivers:
+  googlecloudspanner:
+    collection_interval: ${SPANNER_COLLECTION_INTERVAL:-60s}
+    top_metrics_query_max_rows: ${SPANNER_TOP_QUERIES:-100}
+    backfill_enabled: true
+    cardinality_total_limit: 200000
+    projects:
+      - project_id: ${GCP_PROJECT_ID}
+        service_account: ${GCP_SERVICE_ACCOUNT:-}
+        instances:
+          - instance_id: ${SPANNER_INSTANCE_ID}
+            databases:
+              - ${SPANNER_DATABASE_ID}

@@ -1,0 +1,48 @@
+# DNS Enrichment Processor
+# Enriches network telemetry with DNS context: resolves IP addresses
+# to hostnames and tags DNS-related attributes for correlation.
+#
+# Adds reverse DNS lookups for source/destination IPs and enriches
+# spans and logs with the resolved hostnames. Useful for network
+# troubleshooting, security analysis, and traffic attribution.
+#
+# Note: DNS resolution adds latency — use cached lookups and apply
+# only to network-focused pipelines, not all telemetry.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=dns-enrichment.yaml
+processors:
+  transform/dns-enrichment:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # ── Normalize DNS attributes ──
+          # Map common DNS attributes to OTel semantic conventions
+          - set(attributes["dns.question.name"], attributes["dns.query.name"]) where attributes["dns.query.name"] != nil and attributes["dns.question.name"] == nil
+          - set(attributes["dns.response.code"], attributes["dns.rcode"]) where attributes["dns.rcode"] != nil and attributes["dns.response.code"] == nil
+
+          # ── Tag DNS query types ──
+          - set(attributes["dns.query_type_class"], "internal") where IsMatch(attributes["dns.question.name"], "\\.(svc\\.cluster\\.local|internal|corp|local)$")
+          - set(attributes["dns.query_type_class"], "external") where attributes["dns.question.name"] != nil and attributes["dns.query_type_class"] == nil
+
+          # ── Flag potential DNS tunneling ──
+          # Long subdomain labels or high entropy names may indicate DNS tunneling (T1071.004)
+          - set(attributes["dns.suspicious"], "long_subdomain") where IsMatch(attributes["dns.question.name"], "^[a-zA-Z0-9]{30,}\\.")
+
+    log_statements:
+      - context: log
+        statements:
+          # ── Enrich CoreDNS / DNS server logs ──
+          # Tag DNS response codes for alerting
+          - set(attributes["dns.status"], "success") where IsMatch(body, "(?i)NOERROR")
+          - set(attributes["dns.status"], "nxdomain") where IsMatch(body, "(?i)NXDOMAIN")
+          - set(attributes["dns.status"], "servfail") where IsMatch(body, "(?i)SERVFAIL")
+          - set(attributes["dns.status"], "refused") where IsMatch(body, "(?i)REFUSED")
+
+          # ── Flag high-frequency NXDOMAIN (potential DGA malware) ──
+          - set(attributes["dns.suspicious"], "nxdomain") where IsMatch(body, "(?i)NXDOMAIN")
+
+          # ── Tag DNS-over-HTTPS / DNS-over-TLS ──
+          - set(attributes["dns.protocol"], "DoH") where IsMatch(body, "(?i)(dns-over-https|doh|/dns-query)")
+          - set(attributes["dns.protocol"], "DoT") where IsMatch(body, "(?i)(dns-over-tls|dot|:853)")

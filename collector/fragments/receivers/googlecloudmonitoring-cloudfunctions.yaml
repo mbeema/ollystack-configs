@@ -1,0 +1,33 @@
+# Google Cloud Monitoring Receiver — Cloud Functions
+# Pulls Cloud Functions (1st gen and 2nd gen) metrics from Google Cloud Monitoring.
+# Covers execution counts, duration, memory usage, instance counts, and network.
+#
+# Note: 2nd gen Cloud Functions are backed by Cloud Run, so some metrics
+# appear under run.googleapis.com as well. This fragment covers the
+# cloudfunctions.googleapis.com namespace.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-cloudfunctions.yaml
+receivers:
+  googlecloudmonitoring/cloudfunctions:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Execution ---
+      - metric_name: cloudfunctions.googleapis.com/function/execution_count
+      - metric_name: cloudfunctions.googleapis.com/function/execution_times
+
+      # --- Memory ---
+      - metric_name: cloudfunctions.googleapis.com/function/user_memory_bytes
+
+      # --- Instance Count ---
+      - metric_name: cloudfunctions.googleapis.com/function/active_instances
+      - metric_name: cloudfunctions.googleapis.com/function/instance_count
+
+      # --- Network ---
+      - metric_name: cloudfunctions.googleapis.com/function/network_egress

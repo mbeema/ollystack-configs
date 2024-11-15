@@ -1,0 +1,59 @@
+# Linkerd Service Mesh Receiver (via Prometheus scrape)
+# Scrapes metrics from Linkerd's Rust-based micro-proxy (linkerd2-proxy).
+# Linkerd provides automatic mTLS, L7 metrics, and retries with minimal
+# resource overhead (~10MB per proxy).
+#
+# Covers: request rates, success rates, latency histograms (P50/P95/P99),
+# TCP connections, TLS handshakes, retry counts, and control plane health.
+#
+# Linkerd proxies expose Prometheus metrics on port 4191 by default.
+# Control plane components expose on their respective admin ports.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=linkerd.yaml
+receivers:
+  prometheus/linkerd:
+    config:
+      scrape_configs:
+        # Linkerd data plane (proxy sidecar metrics)
+        - job_name: linkerd-proxy
+          scrape_interval: ${LINKERD_SCRAPE_INTERVAL:-15s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${LINKERD_PROXY_TARGETS:-["localhost:4191"]}
+              labels:
+                component: proxy
+                mesh.type: linkerd
+          # Kubernetes: discover all linkerd-injected pods
+          # kubernetes_sd_configs:
+          #   - role: pod
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_container_port_name]
+          #     action: keep
+          #     regex: linkerd-admin
+          #   - source_labels: [__meta_kubernetes_pod_name]
+          #     target_label: pod
+          #   - source_labels: [__meta_kubernetes_namespace]
+          #     target_label: namespace
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "(request_total|response_total|response_latency_ms_bucket|response_latency_ms_sum|response_latency_ms_count|tcp_open_total|tcp_close_total|tcp_open_connections|tcp_read_bytes_total|tcp_write_bytes_total|inbound_http_.*|outbound_http_.*|control_request_total|control_response_total)"
+
+        # Linkerd control plane
+        - job_name: linkerd-control-plane
+          scrape_interval: ${LINKERD_SCRAPE_INTERVAL:-15s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${LINKERD_CONTROL_TARGETS:-["localhost:9990"]}
+              labels:
+                component: control-plane
+                mesh.type: linkerd
+          # kubernetes_sd_configs:
+          #   - role: pod
+          #     namespaces:
+          #       names: ["linkerd"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_linkerd_io_control_plane_component]
+          #     action: keep
+          #     regex: ".+"

@@ -1,0 +1,20 @@
+# Elasticsearch Receiver
+# Collects performance metrics from Elasticsearch clusters.
+# Monitors cluster health, node stats, index stats, JVM, and thread pools.
+#
+# Required: Elasticsearch user with monitor cluster privilege.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=elasticsearch.yaml
+receivers:
+  elasticsearch:
+    endpoint: ${ELASTICSEARCH_ENDPOINT:-http://localhost:9200}
+    username: ${ELASTICSEARCH_USERNAME:-}
+    password: ${ELASTICSEARCH_PASSWORD:-}
+    collection_interval: ${ELASTICSEARCH_INTERVAL:-60s}
+    # Collect node-level and cluster-level stats
+    nodes: ["_all"]
+    # Skip TLS verification (not for production)
+    skip_cluster_metrics: false
+    tls:
+      insecure_skip_verify: ${ELASTICSEARCH_TLS_INSECURE:-false}

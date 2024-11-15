@@ -1,0 +1,34 @@
+# BGP Receiver (via Prometheus scrape)
+# Scrapes BGP metrics from GoBGP exporter, FRRouting exporter, or
+# BIRD exporter. Monitors BGP neighbor state, route counts, prefix
+# advertisements, and session flaps for enterprise/ISP networks.
+#
+# Covers: neighbor state (Established/Active/Idle), received/advertised
+# prefixes, update messages, notification messages, session uptime,
+# route table size, and AS path length.
+#
+# Use cases: datacenter interconnect monitoring, ISP peering health,
+# Kubernetes Calico BGP mode, and SD-WAN underlay routing.
+#
+# Exporters:
+#   GoBGP:     github.com/czerwonk/bgp_exporter (port 9179)
+#   FRRouting: github.com/tynany/frr_exporter (port 9342)
+#   BIRD:      github.com/czerwonk/bird_exporter (port 9324)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=bgp.yaml
+receivers:
+  prometheus/bgp:
+    config:
+      scrape_configs:
+        - job_name: bgp
+          scrape_interval: ${BGP_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${BGP_EXPORTER_TARGETS:-["localhost:9179"]}
+              labels:
+                component: routing
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "(bgp_session_state|bgp_session_up|bgp_session_flap_count|bgp_peer_prefixes_received|bgp_peer_prefixes_advertised|bgp_peer_updates_received|bgp_peer_updates_sent|bgp_peer_notifications_received|bgp_peer_notifications_sent|bgp_peer_uptime_seconds|bgp_route_count|frr_bgp_.*|bird_protocol_.*)"

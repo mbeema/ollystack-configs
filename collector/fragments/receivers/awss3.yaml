@@ -1,0 +1,20 @@
+# AWS S3 Receiver
+# Reads telemetry data from Amazon S3 buckets. Useful for reprocessing
+# archived telemetry or consuming data written by other services.
+#
+# Required IAM: s3:GetObject, s3:ListBucket on the target bucket.
+# Supports SQS notifications for real-time processing of new objects.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awss3.yaml
+receivers:
+  awss3:
+    s3downloader:
+      region: ${AWS_REGION:-us-east-1}
+      s3_bucket: ${S3_RECEIVER_BUCKET}
+      s3_prefix: ${S3_RECEIVER_PREFIX:-otel/}
+      # SQS queue for S3 event notifications (recommended for real-time)
+      # sqs_queue_url: ${S3_SQS_QUEUE_URL}
+    starttime: ${S3_RECEIVER_START:-}
+    endtime: ${S3_RECEIVER_END:-}
+    encoding: ${S3_RECEIVER_ENCODING:-otlp_json}

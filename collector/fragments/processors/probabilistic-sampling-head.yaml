@@ -1,0 +1,9 @@
+# Probabilistic sampler processor - head-based sampling at ingestion time.
+# Lightweight sampling that does not require buffering full traces.
+# Use this when tail sampling is not feasible due to memory constraints.
+processors:
+  probabilistic_sampler:
+    # Percentage of traces to sample (0-100)
+    sampling_percentage: ${SAMPLING_PERCENTAGE:-10}
+    # Hash seed for deterministic sampling (same trace ID = same decision across collectors)
+    hash_seed: 22

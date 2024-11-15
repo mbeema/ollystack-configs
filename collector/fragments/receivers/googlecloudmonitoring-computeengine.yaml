@@ -1,0 +1,68 @@
+# Google Cloud Monitoring Receiver — Compute Engine (Enhanced)
+# Pulls comprehensive Compute Engine VM metrics from Google Cloud Monitoring.
+# Covers CPU, memory, disk, network, uptime, and guest OS metrics.
+#
+# The base googlecloud.yaml only covers basic cpu/memory/disk/network.
+# This fragment provides full coverage including guest agent metrics
+# and firewall insights.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-computeengine.yaml
+receivers:
+  googlecloudmonitoring/computeengine:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- CPU ---
+      - metric_name: compute.googleapis.com/instance/cpu/utilization
+      - metric_name: compute.googleapis.com/instance/cpu/usage_time
+      - metric_name: compute.googleapis.com/instance/cpu/reserved_cores
+      - metric_name: compute.googleapis.com/instance/cpu/scheduler_wait_time
+
+      # --- Memory ---
+      - metric_name: compute.googleapis.com/instance/memory/balloon/ram_used
+      - metric_name: compute.googleapis.com/instance/memory/balloon/ram_size
+      - metric_name: compute.googleapis.com/instance/memory/balloon/swap_in_bytes_count
+      - metric_name: compute.googleapis.com/instance/memory/balloon/swap_out_bytes_count
+
+      # --- Disk ---
+      - metric_name: compute.googleapis.com/instance/disk/read_bytes_count
+      - metric_name: compute.googleapis.com/instance/disk/write_bytes_count
+      - metric_name: compute.googleapis.com/instance/disk/read_ops_count
+      - metric_name: compute.googleapis.com/instance/disk/write_ops_count
+      - metric_name: compute.googleapis.com/instance/disk/max_read_bytes_count
+      - metric_name: compute.googleapis.com/instance/disk/max_write_bytes_count
+      - metric_name: compute.googleapis.com/instance/disk/max_read_ops_count
+      - metric_name: compute.googleapis.com/instance/disk/max_write_ops_count
+      - metric_name: compute.googleapis.com/instance/disk/average_io_queue_depth
+      - metric_name: compute.googleapis.com/instance/disk/average_io_latency
+
+      # --- Network ---
+      - metric_name: compute.googleapis.com/instance/network/received_bytes_count
+      - metric_name: compute.googleapis.com/instance/network/sent_bytes_count
+      - metric_name: compute.googleapis.com/instance/network/received_packets_count
+      - metric_name: compute.googleapis.com/instance/network/sent_packets_count
+
+      # --- Uptime ---
+      - metric_name: compute.googleapis.com/instance/uptime
+      - metric_name: compute.googleapis.com/instance/uptime_total
+
+      # --- Guest Agent (Ops Agent installed) ---
+      - metric_name: agent.googleapis.com/cpu/utilization
+      - metric_name: agent.googleapis.com/memory/percent_used
+      - metric_name: agent.googleapis.com/disk/percent_used
+      - metric_name: agent.googleapis.com/network/tcp_connections
+      - metric_name: agent.googleapis.com/processes/count_by_state
+
+      # --- Firewall Insights ---
+      - metric_name: compute.googleapis.com/firewall/dropped_bytes_count
+      - metric_name: compute.googleapis.com/firewall/dropped_packets_count
+
+      # --- Integrity Monitoring (Shielded VMs) ---
+      - metric_name: compute.googleapis.com/instance/integrity/early_boot_validation_status
+      - metric_name: compute.googleapis.com/instance/integrity/late_boot_validation_status

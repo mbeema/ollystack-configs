@@ -1,0 +1,30 @@
+# Failover Connector
+# Provides automatic failover between multiple downstream pipelines.
+# If the primary pipeline's exporter becomes unhealthy, data is
+# automatically routed to the next pipeline in the priority list.
+#
+# Use cases: multi-backend redundancy, primary/DR routing,
+# graceful degradation when a backend is unavailable.
+#
+# Recovery: automatically returns to the primary pipeline when it
+# becomes healthy again (based on retry_interval).
+
+connectors:
+  failover:
+    # Priority-ordered list of pipelines (first = primary)
+    priority_levels:
+      # Level 0: Primary backend (e.g., Datadog, Splunk, Grafana Cloud)
+      - [traces/primary, metrics/primary, logs/primary]
+      # Level 1: Secondary/DR backend
+      - [traces/secondary, metrics/secondary, logs/secondary]
+      # Level 2: Last resort — local file or S3 buffer
+      # - [traces/buffer, metrics/buffer, logs/buffer]
+
+    # How often to check if a higher-priority pipeline has recovered
+    retry_interval: ${FAILOVER_RETRY_INTERVAL:-30s}
+
+    # Number of retry attempts before moving to the next priority level
+    retry_gap: ${FAILOVER_RETRY_GAP:-5s}
+
+    # Maximum number of retries per level before failing over
+    max_retries: ${FAILOVER_MAX_RETRIES:-3}

@@ -1,0 +1,200 @@
+# AWS CloudWatch Receiver — Elastic Load Balancing (ALB + NLB)
+# Pulls comprehensive ALB and NLB metrics from CloudWatch.
+# The base awscloudwatch.yaml only covers basic ALB metrics (RequestCount,
+# TargetResponseTime, 5XX). This fragment provides full coverage for both
+# Application Load Balancers and Network Load Balancers.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where load balancers reside
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-elb.yaml
+receivers:
+  awscloudwatch/elb:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # Application Load Balancer (ALB) — Full Metrics
+        # Namespace: AWS/ApplicationELB
+        # -----------------------------------------------------------------
+        - namespace: AWS/ApplicationELB
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Request Volume ---
+            - metric_name: RequestCount
+              statistics:
+                - Sum
+            - metric_name: ActiveConnectionCount
+              statistics:
+                - Sum
+            - metric_name: NewConnectionCount
+              statistics:
+                - Sum
+            - metric_name: RejectedConnectionCount
+              statistics:
+                - Sum
+            - metric_name: ProcessedBytes
+              statistics:
+                - Sum
+            - metric_name: ConsumedLCUs
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Latency ---
+            - metric_name: TargetResponseTime
+              statistics:
+                - Average
+                - Maximum
+                - p50
+                - p90
+                - p95
+                - p99
+            - metric_name: RequestCountPerTarget
+              statistics:
+                - Sum
+
+            # --- HTTP Errors (ELB-generated) ---
+            - metric_name: HTTPCode_ELB_3XX_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_ELB_4XX_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_ELB_5XX_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_ELB_500_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_ELB_502_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_ELB_503_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_ELB_504_Count
+              statistics:
+                - Sum
+
+            # --- HTTP Errors (Target-generated) ---
+            - metric_name: HTTPCode_Target_2XX_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_Target_3XX_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_Target_4XX_Count
+              statistics:
+                - Sum
+            - metric_name: HTTPCode_Target_5XX_Count
+              statistics:
+                - Sum
+
+            # --- Target Health ---
+            - metric_name: HealthyHostCount
+              statistics:
+                - Average
+                - Minimum
+            - metric_name: UnHealthyHostCount
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: TargetConnectionErrorCount
+              statistics:
+                - Sum
+            - metric_name: TargetTLSNegotiationErrorCount
+              statistics:
+                - Sum
+
+            # --- Fixed Responses & Redirects ---
+            - metric_name: HTTP_Fixed_Response_Count
+              statistics:
+                - Sum
+            - metric_name: HTTP_Redirect_Count
+              statistics:
+                - Sum
+            - metric_name: HTTP_Redirect_Url_Limit_Exceeded_Count
+              statistics:
+                - Sum
+
+            # --- WAF (if AWS WAF is attached) ---
+            - metric_name: RuleEvaluations
+              statistics:
+                - Sum
+
+            # --- gRPC ---
+            - metric_name: GrpcRequestCount
+              statistics:
+                - Sum
+
+        # -----------------------------------------------------------------
+        # Network Load Balancer (NLB)
+        # Namespace: AWS/NetworkELB
+        # -----------------------------------------------------------------
+        - namespace: AWS/NetworkELB
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Connection Volume ---
+            - metric_name: ActiveFlowCount
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: NewFlowCount
+              statistics:
+                - Sum
+            - metric_name: ConsumedLCUs
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Data Transfer ---
+            - metric_name: ProcessedBytes
+              statistics:
+                - Sum
+            - metric_name: ProcessedPackets
+              statistics:
+                - Sum
+            - metric_name: ProcessedBytes_TLS
+              statistics:
+                - Sum
+
+            # --- TCP ---
+            - metric_name: TCP_Client_Reset_Count
+              statistics:
+                - Sum
+            - metric_name: TCP_ELB_Reset_Count
+              statistics:
+                - Sum
+            - metric_name: TCP_Target_Reset_Count
+              statistics:
+                - Sum
+
+            # --- TLS ---
+            - metric_name: ClientTLSNegotiationErrorCount
+              statistics:
+                - Sum
+            - metric_name: TargetTLSNegotiationErrorCount
+              statistics:
+                - Sum
+
+            # --- Target Health ---
+            - metric_name: HealthyHostCount
+              statistics:
+                - Average
+                - Minimum
+            - metric_name: UnHealthyHostCount
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Port Allocation (for NAT gateway targets) ---
+            - metric_name: PortAllocationErrorCount
+              statistics:
+                - Sum

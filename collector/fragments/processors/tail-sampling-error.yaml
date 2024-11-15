@@ -1,0 +1,31 @@
+# Tail sampling processor - keep all traces that contain errors.
+# Ensures 100% retention of error traces for debugging.
+processors:
+  tail_sampling/errors:
+    # Time to wait for all spans of a trace before making a decision
+    decision_wait: 10s
+    # Maximum number of traces held in memory
+    num_traces: 100000
+    # Expected new traces per second (for memory pre-allocation)
+    expected_new_traces_per_sec: 1000
+
+    policies:
+      # Keep all traces where any span has an ERROR status
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # Also keep traces where HTTP status code indicates an error
+      - name: http-errors-policy
+        type: string_attribute
+        string_attribute:
+          key: http.status_code
+          values:
+            - "500"
+            - "501"
+            - "502"
+            - "503"
+            - "504"
+          enabled_regex_matching: false

@@ -1,0 +1,143 @@
+# AWS CloudWatch Receiver — Step Functions
+# Pulls Step Functions execution metrics from CloudWatch.
+# Covers execution counts, success/failure, duration, and throttling.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where Step Functions state machines reside
+#
+# Note: Enable logging on state machines for execution history details.
+# CloudWatch metrics provide aggregate counts; for per-execution traces,
+# use X-Ray integration (enable tracing on the state machine).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-stepfunctions.yaml
+receivers:
+  awscloudwatch/stepfunctions:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        - namespace: AWS/States
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Execution Counts ---
+            - metric_name: ExecutionsStarted
+              statistics:
+                - Sum
+            - metric_name: ExecutionsSucceeded
+              statistics:
+                - Sum
+            - metric_name: ExecutionsFailed
+              statistics:
+                - Sum
+            - metric_name: ExecutionsTimedOut
+              statistics:
+                - Sum
+            - metric_name: ExecutionsAborted
+              statistics:
+                - Sum
+
+            # --- Execution Duration ---
+            - metric_name: ExecutionTime
+              statistics:
+                - Average
+                - Maximum
+                - Minimum
+                - p99
+
+            # --- Throttling ---
+            - metric_name: ExecutionThrottled
+              statistics:
+                - Sum
+            - metric_name: ThrottledEvents
+              statistics:
+                - Sum
+
+            # --- Activity Metrics ---
+            - metric_name: ActivitiesStarted
+              statistics:
+                - Sum
+            - metric_name: ActivitiesSucceeded
+              statistics:
+                - Sum
+            - metric_name: ActivitiesFailed
+              statistics:
+                - Sum
+            - metric_name: ActivitiesTimedOut
+              statistics:
+                - Sum
+            - metric_name: ActivityRunTime
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: ActivityScheduleTime
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: ActivitiesScheduled
+              statistics:
+                - Sum
+            - metric_name: ActivitiesHeartbeatTimedOut
+              statistics:
+                - Sum
+
+            # --- Lambda Function Metrics (tasks invoking Lambda) ---
+            - metric_name: LambdaFunctionsStarted
+              statistics:
+                - Sum
+            - metric_name: LambdaFunctionsSucceeded
+              statistics:
+                - Sum
+            - metric_name: LambdaFunctionsFailed
+              statistics:
+                - Sum
+            - metric_name: LambdaFunctionsTimedOut
+              statistics:
+                - Sum
+            - metric_name: LambdaFunctionRunTime
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: LambdaFunctionScheduleTime
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Service Integration Metrics ---
+            - metric_name: ServiceIntegrationsStarted
+              statistics:
+                - Sum
+            - metric_name: ServiceIntegrationsSucceeded
+              statistics:
+                - Sum
+            - metric_name: ServiceIntegrationsFailed
+              statistics:
+                - Sum
+            - metric_name: ServiceIntegrationsTimedOut
+              statistics:
+                - Sum
+            - metric_name: ServiceIntegrationRunTime
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Express Workflows (synchronous) ---
+            - metric_name: ExpressExecutionsStarted
+              statistics:
+                - Sum
+            - metric_name: ExpressExecutionsSucceeded
+              statistics:
+                - Sum
+            - metric_name: ExpressExecutionsFailed
+              statistics:
+                - Sum
+            - metric_name: ExpressExecutionsTimedOut
+              statistics:
+                - Sum
+            - metric_name: ExpressExecutionsAborted
+              statistics:
+                - Sum

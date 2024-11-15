@@ -1,0 +1,29 @@
+# Splunk HEC Exporter
+# Exports logs, metrics, and traces to Splunk via HTTP Event Collector (HEC).
+# Compatible with Splunk Enterprise, Splunk Cloud, and Splunk Observability.
+#
+# Required: Splunk HEC token from Settings > Data Inputs > HTTP Event Collector.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=splunkhec.yaml
+exporters:
+  splunk_hec:
+    token: ${SPLUNK_HEC_TOKEN}
+    endpoint: ${SPLUNK_HEC_ENDPOINT}
+    source: ${SPLUNK_SOURCE:-otel}
+    sourcetype: ${SPLUNK_SOURCETYPE:-otel}
+    index: ${SPLUNK_INDEX:-main}
+    # Max connections (tune for throughput)
+    max_connections: ${SPLUNK_MAX_CONN:-100}
+    # Disable TLS verification (not for production)
+    tls:
+      insecure_skip_verify: ${SPLUNK_TLS_INSECURE:-false}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

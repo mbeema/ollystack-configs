@@ -1,0 +1,108 @@
+# AWS CloudWatch Receiver — S3
+# Pulls S3 bucket-level storage and request metrics from CloudWatch.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where S3 buckets reside
+#
+# Prerequisites:
+#   - Request metrics must be explicitly enabled per bucket in S3 console
+#     (S3 > Bucket > Metrics > Request metrics). Without this, only
+#     daily storage metrics (BucketSizeBytes, NumberOfObjects) are available.
+#   - Storage metrics are emitted once per day by AWS.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-s3.yaml
+receivers:
+  awscloudwatch/s3:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # S3 Daily Storage Metrics (always available)
+        # -----------------------------------------------------------------
+        - namespace: AWS/S3
+          period: 86400s  # 1 day — these are daily metrics
+          metrics:
+            - metric_name: BucketSizeBytes
+              statistics:
+                - Average
+            - metric_name: NumberOfObjects
+              statistics:
+                - Average
+
+        # -----------------------------------------------------------------
+        # S3 Request Metrics (requires opt-in per bucket)
+        # -----------------------------------------------------------------
+        - namespace: AWS/S3
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # Request volume
+            - metric_name: AllRequests
+              statistics:
+                - Sum
+            - metric_name: GetRequests
+              statistics:
+                - Sum
+            - metric_name: PutRequests
+              statistics:
+                - Sum
+            - metric_name: DeleteRequests
+              statistics:
+                - Sum
+            - metric_name: HeadRequests
+              statistics:
+                - Sum
+            - metric_name: PostRequests
+              statistics:
+                - Sum
+            - metric_name: SelectRequests
+              statistics:
+                - Sum
+            - metric_name: ListRequests
+              statistics:
+                - Sum
+
+            # Latency
+            - metric_name: FirstByteLatency
+              statistics:
+                - Average
+                - Maximum
+                - p99
+            - metric_name: TotalRequestLatency
+              statistics:
+                - Average
+                - Maximum
+                - p99
+
+            # Data transfer
+            - metric_name: BytesDownloaded
+              statistics:
+                - Sum
+            - metric_name: BytesUploaded
+              statistics:
+                - Sum
+
+            # Errors
+            - metric_name: 4xxErrors
+              statistics:
+                - Sum
+            - metric_name: 5xxErrors
+              statistics:
+                - Sum
+
+            # Replication (if Cross-Region Replication is enabled)
+            - metric_name: ReplicationLatency
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: OperationsPendingReplication
+              statistics:
+                - Average
+            - metric_name: OperationsFailedReplication
+              statistics:
+                - Sum

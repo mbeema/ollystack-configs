@@ -1,0 +1,88 @@
+# TimescaleDB Receiver (via PostgreSQL receiver)
+# Pulls metrics from TimescaleDB using the PostgreSQL receiver with
+# additional SQL queries for time-series specific metrics.
+#
+# TimescaleDB extends PostgreSQL with hypertables, continuous aggregates,
+# compression, and retention policies. This fragment monitors both the
+# PostgreSQL layer and TimescaleDB-specific internals.
+#
+# Covers: hypertable sizes, chunk counts, compression ratios, continuous
+# aggregate refresh stats, background worker jobs, plus all standard
+# PostgreSQL metrics (connections, transactions, locks, replication).
+#
+# Required: TimescaleDB extension installed and pg_stat_statements enabled.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=timescaledb.yaml
+receivers:
+  # Standard PostgreSQL metrics
+  postgresql/timescaledb:
+    endpoint: ${TIMESCALEDB_ENDPOINT:-localhost:5432}
+    username: ${TIMESCALEDB_USERNAME:-postgres}
+    password: ${TIMESCALEDB_PASSWORD}
+    databases:
+      - ${TIMESCALEDB_DATABASE:-tsdb}
+    collection_interval: ${TIMESCALEDB_INTERVAL:-60s}
+    tls:
+      insecure: ${TIMESCALEDB_TLS_INSECURE:-true}
+    metrics:
+      postgresql.backends:
+        enabled: true
+      postgresql.commits:
+        enabled: true
+      postgresql.rollbacks:
+        enabled: true
+      postgresql.rows:
+        enabled: true
+      postgresql.operations:
+        enabled: true
+      postgresql.deadlocks:
+        enabled: true
+      postgresql.temp_files:
+        enabled: true
+      postgresql.db_size:
+        enabled: true
+      postgresql.table.size:
+        enabled: true
+      postgresql.index.size:
+        enabled: true
+      postgresql.replication.data_delay:
+        enabled: true
+
+  # TimescaleDB-specific metrics via SQL queries
+  sqlquery/timescaledb:
+    driver: postgres
+    datasource: "host=${TIMESCALEDB_HOST:-localhost} port=${TIMESCALEDB_PORT:-5432} user=${TIMESCALEDB_USERNAME:-postgres} password=${TIMESCALEDB_PASSWORD} dbname=${TIMESCALEDB_DATABASE:-tsdb} sslmode=${TIMESCALEDB_SSL_MODE:-disable}"
+    collection_interval: ${TIMESCALEDB_INTERVAL:-60s}
+    queries:
+      # Hypertable sizes and chunk counts
+      - sql: |
+          SELECT hypertable_schema, hypertable_name,
+                 total_bytes, num_chunks, compressed_total_bytes
+          FROM timescaledb_information.hypertable_size()
+          JOIN timescaledb_information.hypertables USING (hypertable_schema, hypertable_name)
+        metrics:
+          - metric_name: timescaledb.hypertable.total_bytes
+            value_column: total_bytes
+            attribute_columns: [hypertable_schema, hypertable_name]
+          - metric_name: timescaledb.hypertable.num_chunks
+            value_column: num_chunks
+            attribute_columns: [hypertable_schema, hypertable_name]
+          - metric_name: timescaledb.hypertable.compressed_bytes
+            value_column: compressed_total_bytes
+            attribute_columns: [hypertable_schema, hypertable_name]
+
+      # Background worker job stats
+      - sql: |
+          SELECT application_name, total_runs, total_successes, total_failures
+          FROM timescaledb_information.job_stats
+        metrics:
+          - metric_name: timescaledb.job.total_runs
+            value_column: total_runs
+            attribute_columns: [application_name]
+          - metric_name: timescaledb.job.total_successes
+            value_column: total_successes
+            attribute_columns: [application_name]
+          - metric_name: timescaledb.job.total_failures
+            value_column: total_failures
+            attribute_columns: [application_name]

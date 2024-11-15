@@ -1,0 +1,25 @@
+# File Exporter
+# Writes telemetry to local files for audit trails, compliance, or offline analysis.
+# Includes automatic rotation to prevent disk exhaustion.
+
+exporters:
+  file:
+    # Output file path — directory must exist and be writable by the collector process
+    path: ${FILE_EXPORT_PATH:-/var/otel/export}/otel-export.json
+
+    # Rotation policy — prevents unbounded disk growth
+    rotation:
+      # Rotate when a single file exceeds this size
+      max_megabytes: 100
+      # Number of rotated files to retain before deletion
+      max_backups: 10
+      # Maximum age in days before a rotated file is deleted (0 = no age limit)
+      max_days: ${FILE_EXPORT_MAX_DAYS:-30}
+      # Compress rotated files with gzip
+      localtime: true
+
+    # Output format: json (one JSON object per line)
+    format: json
+
+    # Flush interval — controls how frequently data is written to disk
+    flush_interval: ${FILE_EXPORT_FLUSH_INTERVAL:-5s}

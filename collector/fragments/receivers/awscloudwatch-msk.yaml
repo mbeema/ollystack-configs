@@ -1,0 +1,208 @@
+# AWS CloudWatch Receiver — MSK (Amazon Managed Streaming for Apache Kafka)
+# Pulls MSK broker, topic, partition, and consumer group metrics.
+# Covers throughput, consumer lag, disk usage, and cluster health.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where MSK clusters reside
+#
+# Note: MSK publishes metrics at three levels of detail:
+#   - DEFAULT: Cluster and broker-level (free)
+#   - PER_BROKER: Per-broker metrics (additional cost)
+#   - PER_TOPIC_PER_BROKER: Per-topic-per-broker (additional cost)
+# Enable enhanced monitoring in MSK cluster configuration for full coverage.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-msk.yaml
+receivers:
+  awscloudwatch/msk:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # MSK DEFAULT Monitoring (Free Tier)
+        # Namespace: AWS/Kafka
+        # -----------------------------------------------------------------
+        - namespace: AWS/Kafka
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Cluster Health ---
+            - metric_name: ActiveControllerCount
+              statistics:
+                - Average
+            - metric_name: OfflinePartitionsCount
+              statistics:
+                - Average
+            - metric_name: ZooKeeperRequestLatencyMsMean
+              statistics:
+                - Average
+
+            # --- Broker Metrics ---
+            - metric_name: CpuUser
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: CpuSystem
+              statistics:
+                - Average
+            - metric_name: CpuIdle
+              statistics:
+                - Average
+            - metric_name: MemoryUsed
+              statistics:
+                - Average
+            - metric_name: MemoryFree
+              statistics:
+                - Average
+            - metric_name: MemoryBuffered
+              statistics:
+                - Average
+            - metric_name: MemoryCached
+              statistics:
+                - Average
+
+            # --- Storage ---
+            - metric_name: KafkaDataLogsDiskUsed
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: RootDiskUsed
+              statistics:
+                - Average
+
+            # --- Network ---
+            - metric_name: NetworkRxPackets
+              statistics:
+                - Sum
+            - metric_name: NetworkTxPackets
+              statistics:
+                - Sum
+            - metric_name: NetworkRxDropped
+              statistics:
+                - Sum
+            - metric_name: NetworkTxDropped
+              statistics:
+                - Sum
+            - metric_name: NetworkRxErrors
+              statistics:
+                - Sum
+            - metric_name: NetworkTxErrors
+              statistics:
+                - Sum
+
+        # -----------------------------------------------------------------
+        # MSK PER_BROKER Monitoring (Enhanced)
+        # -----------------------------------------------------------------
+        - namespace: AWS/Kafka
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Throughput ---
+            - metric_name: BytesInPerSec
+              statistics:
+                - Average
+                - Sum
+            - metric_name: BytesOutPerSec
+              statistics:
+                - Average
+                - Sum
+            - metric_name: MessagesInPerSec
+              statistics:
+                - Average
+                - Sum
+
+            # --- Partitions ---
+            - metric_name: PartitionCount
+              statistics:
+                - Average
+            - metric_name: UnderReplicatedPartitions
+              statistics:
+                - Average
+            - metric_name: UnderMinIsrPartitionCount
+              statistics:
+                - Average
+            - metric_name: LeaderCount
+              statistics:
+                - Average
+
+            # --- Request Handling ---
+            - metric_name: RequestHandlerAvgIdlePercent
+              statistics:
+                - Average
+            - metric_name: ProduceLocalTimeMsMean
+              statistics:
+                - Average
+            - metric_name: ProduceTotalTimeMsMean
+              statistics:
+                - Average
+            - metric_name: FetchConsumerLocalTimeMsMean
+              statistics:
+                - Average
+            - metric_name: FetchConsumerTotalTimeMsMean
+              statistics:
+                - Average
+            - metric_name: FetchFollowerLocalTimeMsMean
+              statistics:
+                - Average
+            - metric_name: FetchFollowerTotalTimeMsMean
+              statistics:
+                - Average
+            - metric_name: ProduceRequestQueueTimeMsMean
+              statistics:
+                - Average
+            - metric_name: FetchConsumerRequestQueueTimeMsMean
+              statistics:
+                - Average
+
+            # --- Replication ---
+            - metric_name: ReplicaBytesInPerSec
+              statistics:
+                - Average
+            - metric_name: ReplicaBytesOutPerSec
+              statistics:
+                - Average
+            - metric_name: ReplicaFetcherManagerMaxLag
+              statistics:
+                - Maximum
+
+            # --- Consumer Group Lag ---
+            - metric_name: EstimatedMaxTimeLag
+              statistics:
+                - Maximum
+            - metric_name: MaxOffsetLag
+              statistics:
+                - Maximum
+            - metric_name: SumOffsetLag
+              statistics:
+                - Sum
+
+            # --- Connection Count ---
+            - metric_name: ConnectionCount
+              statistics:
+                - Average
+                - Maximum
+
+        # -----------------------------------------------------------------
+        # MSK PER_TOPIC_PER_BROKER Monitoring (Enhanced)
+        # -----------------------------------------------------------------
+        - namespace: AWS/Kafka
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            - metric_name: FetchMessageConversionsPerSec
+              statistics:
+                - Average
+            - metric_name: ProduceMessageConversionsPerSec
+              statistics:
+                - Average
+            - metric_name: MessagesInPerSec
+              statistics:
+                - Sum
+            - metric_name: BytesInPerSec
+              statistics:
+                - Sum
+            - metric_name: BytesOutPerSec
+              statistics:
+                - Sum

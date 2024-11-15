@@ -1,0 +1,19 @@
+# Filter processor for metrics - drop unwanted metrics to reduce volume and cost.
+# Uses OTTL (OpenTelemetry Transformation Language) conditions.
+processors:
+  filter/metrics:
+    error_mode: ignore
+    metrics:
+      # Drop metrics matching these conditions
+      datapoint:
+        # Drop idle CPU time metrics (high cardinality, low value)
+        - 'metric.name == "system.cpu.time" and attributes["state"] == "idle"'
+        # Drop wait CPU time metrics
+        - 'metric.name == "system.cpu.time" and attributes["state"] == "wait"'
+      metric:
+        # Drop internal runtime metrics that are typically not needed
+        - 'name == "runtime.uptime"'
+        # Drop metrics matching a pattern (e.g., debug/internal metrics)
+        - 'IsMatch(name, "^internal\\..*")'
+        # Drop process-level metrics if not needed
+        - 'IsMatch(name, "^process\\.runtime\\..*")'

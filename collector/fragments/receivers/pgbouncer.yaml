@@ -1,0 +1,34 @@
+# PgBouncer Receiver (via Prometheus scrape)
+# Scrapes metrics from PgBouncer's built-in Prometheus exporter or
+# a sidecar exporter (pgbouncer_exporter).
+#
+# Monitors: connection pool utilization, client/server connections,
+# wait times, query durations, pool saturation, and transaction stats.
+#
+# Critical for detecting connection exhaustion, pool saturation,
+# and client queuing — the top PostgreSQL availability issues.
+#
+# Little's Law sizing: pool_size = avg_query_time_sec * queries_per_sec
+#
+# Required: pgbouncer_exporter sidecar or Prometheus metrics endpoint.
+#   github.com/prometheus-community/pgbouncer_exporter
+#
+# Usage:
+#   otelcol --config=base.yaml --config=pgbouncer.yaml
+receivers:
+  prometheus/pgbouncer:
+    config:
+      scrape_configs:
+        - job_name: pgbouncer
+          scrape_interval: ${PGBOUNCER_SCRAPE_INTERVAL:-15s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${PGBOUNCER_EXPORTER_TARGETS:-["localhost:9127"]}
+              labels:
+                component: connection-pool
+                db.system: postgresql
+          metric_relabel_configs:
+            # Keep essential pool health metrics
+            - source_labels: [__name__]
+              action: keep
+              regex: "pgbouncer_(show_stats_totals_.*|pools_client_active_connections|pools_client_waiting_connections|pools_server_active_connections|pools_server_idle_connections|pools_pool_mode|pools_current_connections|stats_total_query_count|stats_total_query_time_microseconds|stats_total_wait_time_microseconds|stats_avg_query_duration_microseconds|stats_avg_wait_time_microseconds|config_max_client_conn|config_default_pool_size)"

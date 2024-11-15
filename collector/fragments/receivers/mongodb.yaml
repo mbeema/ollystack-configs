@@ -1,0 +1,18 @@
+# MongoDB Receiver
+# Collects performance metrics from MongoDB instances and replica sets.
+# Monitors connections, operations, memory, storage, replication, and opcounters.
+#
+# Required: MongoDB user with clusterMonitor role.
+#   db.createUser({user: "otel", pwd: "...", roles: [{role: "clusterMonitor", db: "admin"}]})
+#
+# Usage:
+#   otelcol --config=base.yaml --config=mongodb.yaml
+receivers:
+  mongodb:
+    hosts:
+      - endpoint: ${MONGODB_ENDPOINT:-localhost:27017}
+    username: ${MONGODB_USERNAME:-otel}
+    password: ${MONGODB_PASSWORD}
+    collection_interval: ${MONGODB_INTERVAL:-60s}
+    tls:
+      insecure: ${MONGODB_TLS_INSECURE:-true}

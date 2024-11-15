@@ -1,0 +1,61 @@
+# Azure Monitor Receiver — Core (Virtual Machines)
+# Pulls metrics from Azure Monitor (Azure Resource Manager metrics API).
+# Requires Azure AD credentials with Monitoring Reader role.
+#
+# This is the base Azure Monitor receiver with common VM metrics.
+# For comprehensive per-service coverage, compose with the dedicated fragments:
+#
+#   azuremonitor-sqldatabase.yaml    — SQL Database, Elastic Pool, Managed Instance
+#   azuremonitor-cosmosdb.yaml       — Cosmos DB (RU, throttling, latency, storage)
+#   azuremonitor-appservice.yaml     — App Service / Web Apps + App Service Plans
+#   azuremonitor-functions.yaml      — Azure Functions execution & health
+#   azuremonitor-servicebus.yaml     — Service Bus queues, topics, namespaces
+#   azuremonitor-eventhubs.yaml      — Event Hubs throughput, connections, capture
+#   azuremonitor-storage.yaml        — Storage Accounts (Blob, File, Queue, Table)
+#   azuremonitor-rediscache.yaml     — Azure Cache for Redis + Redis Enterprise
+#   azuremonitor-apimanagement.yaml  — API Management (APIM) gateway metrics
+#   azuremonitor-frontdoor.yaml      — Front Door & CDN (requests, latency, WAF)
+#   azuremonitor-containerapps.yaml  — Container Apps (replicas, CPU, memory)
+#   azuremonitor-keyvault.yaml       — Key Vault (API hit/miss, latency, saturation)
+#   azuremonitor-appgateway.yaml     — Application Gateway (L7 LB, WAF)
+#   azuremonitor-loadbalancer.yaml   — Load Balancer (L4, SNAT, health probes)
+#   azuremonitor-aks.yaml            — AKS control plane & node metrics
+#
+# Example (compose multiple fragments):
+#   otelcol --config=base.yaml \
+#           --config=azuremonitor.yaml \
+#           --config=azuremonitor-sqldatabase.yaml \
+#           --config=azuremonitor-cosmosdb.yaml \
+#           --config=azuremonitor-servicebus.yaml
+
+receivers:
+  azuremonitor:
+    # Azure AD tenant for authentication
+    tenant_id: ${AZURE_TENANT_ID}
+    # Azure AD client (service principal) ID
+    client_id: ${AZURE_CLIENT_ID}
+    # Azure AD client secret
+    client_secret: ${AZURE_CLIENT_SECRET}
+    # Azure subscription to monitor
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    # Azure cloud environment (AzureCloud, AzureGovernment, AzureChinaCloud)
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    # How often to poll Azure Monitor for new metrics
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    # Resource types and metrics to collect
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          # Virtual Machines metrics (basic — see per-service fragments for all other services)
+          - resource_type: Microsoft.Compute/virtualMachines
+            metrics:
+              - name: Percentage CPU
+              - name: Available Memory Bytes
+              - name: Disk Read Bytes
+              - name: Disk Write Bytes
+              - name: Disk Read Operations/Sec
+              - name: Disk Write Operations/Sec
+              - name: Network In Total
+              - name: Network Out Total
+              - name: OS Disk Queue Depth
+              - name: VM Availability Metric

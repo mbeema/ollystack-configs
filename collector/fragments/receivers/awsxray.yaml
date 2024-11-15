@@ -1,0 +1,11 @@
+# AWS X-Ray Receiver
+# Receives AWS X-Ray trace segments over UDP and converts them to OTLP spans.
+# Compatible with AWS X-Ray SDK instrumented applications.
+receivers:
+  awsxray:
+    # UDP endpoint for receiving X-Ray segments
+    endpoint: ${XRAY_ENDPOINT:-0.0.0.0:2000}
+    # Transport protocol (udp is the standard X-Ray daemon protocol)
+    transport: ${XRAY_TRANSPORT:-udp}
+    # AWS region for X-Ray API calls (used for segment ID resolution)
+    # region: ${AWS_REGION:-us-east-1}

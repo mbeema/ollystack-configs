@@ -1,0 +1,26 @@
+# Forward Connector
+# Passes telemetry data from one pipeline to another without
+# modification. Acts as a bridge between pipeline stages.
+#
+# Use cases: fan-out (send same data to multiple pipelines),
+# pipeline composition (pre-process → route → export), and
+# separating collection from processing stages.
+#
+# The forward connector is the simplest connector — it just
+# copies data between pipelines with zero transformation.
+
+connectors:
+  forward:
+    # No configuration required — forward passes data as-is.
+    # Wire it in the service section:
+    #
+    # service:
+    #   pipelines:
+    #     traces/ingest:
+    #       receivers: [otlp]
+    #       processors: [batch]
+    #       exporters: [forward]       # ← sends to forward connector
+    #     traces/export:
+    #       receivers: [forward]       # ← receives from forward connector
+    #       processors: [tail_sampling]
+    #       exporters: [otlp/backend]

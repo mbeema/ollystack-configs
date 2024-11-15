@@ -1,0 +1,13 @@
+# Resource detection processor for Azure environments.
+# Automatically detects Azure VM metadata and AKS cluster details.
+processors:
+  resourcedetection/azure:
+    detectors:
+      # Azure VM metadata (VM name, size, location, resource group, subscription ID)
+      - azure
+      # AKS cluster metadata (cluster name)
+      - aks
+    # Do not override existing resource attributes
+    override: false
+    # Timeout for IMDS endpoint calls
+    timeout: 5s

@@ -1,0 +1,29 @@
+# AWS S3 Exporter
+# Exports telemetry data (traces, metrics, logs) to Amazon S3 buckets.
+# Useful for long-term archival, data lake ingestion, and compliance storage.
+#
+# Required IAM permissions:
+#   s3:PutObject
+#   s3:GetBucketLocation
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awss3.yaml
+exporters:
+  awss3:
+    region: ${AWS_REGION}
+    s3_bucket: ${AWS_S3_BUCKET}
+    s3_prefix: ${AWS_S3_PREFIX:-otel}
+    s3_partition: minute
+    # Encoding: otlp_json or otlp_proto
+    marshaler: ${AWS_S3_FORMAT:-otlp_json}
+    # File format suffix
+    file_prefix: ""
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000

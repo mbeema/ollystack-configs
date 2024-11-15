@@ -1,0 +1,38 @@
+# Honeycomb Exporter (via OTLP)
+# Exports traces and logs to Honeycomb using the OTLP/gRPC protocol.
+# Honeycomb natively supports OTLP — use the standard OTLP exporter
+# pointed at Honeycomb's endpoint with your API key.
+#
+# Required: Honeycomb API key.
+#
+# Note: Honeycomb also supports the Honeycomb Marker exporter for
+# deployment markers (see honeycombmarker below).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=honeycomb.yaml
+exporters:
+  otlp/honeycomb:
+    endpoint: ${HONEYCOMB_ENDPOINT:-api.honeycomb.io:443}
+    headers:
+      x-honeycomb-team: ${HONEYCOMB_API_KEY}
+      x-honeycomb-dataset: ${HONEYCOMB_DATASET:-otel}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+
+  # Honeycomb Marker exporter for deployment markers
+  honeycombmarker:
+    api_key: ${HONEYCOMB_API_KEY}
+    api_url: ${HONEYCOMB_API_URL:-https://api.honeycomb.io}
+    markers:
+      - type: deploy
+        rules:
+          - log_conditions:
+              - body: "deploy"
+        dataset_slug: ${HONEYCOMB_DATASET:-otel}

@@ -1,0 +1,25 @@
+# Google Cloud Pub/Sub Exporter
+# Exports telemetry data to Google Cloud Pub/Sub topics.
+# Useful for fan-out architectures, buffering, or triggering downstream processing.
+#
+# Required: roles/pubsub.publisher on the target topic(s).
+# Required: GOOGLE_APPLICATION_CREDENTIALS or Workload Identity
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudpubsub-exporter.yaml
+exporters:
+  googlecloudpubsub:
+    project: ${GCP_PROJECT_ID}
+    topic: ${PUBSUB_EXPORT_TOPIC:-otel-telemetry}
+    encoding: ${PUBSUB_ENCODING:-otlp_proto_trace}
+    # Compression: none or gzip
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

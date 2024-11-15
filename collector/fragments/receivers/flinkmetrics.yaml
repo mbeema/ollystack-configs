@@ -1,0 +1,57 @@
+# Apache Flink Metrics Receiver
+# Pulls metrics from Apache Flink's REST API.
+# Covers JobManager, TaskManager, jobs, operators, and checkpoints.
+#
+# Required: Flink REST API accessible (default port 8081).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=flinkmetrics.yaml
+receivers:
+  flinkmetrics:
+    endpoint: ${FLINK_ENDPOINT:-http://localhost:8081}
+    collection_interval: ${FLINK_INTERVAL:-60s}
+    metrics:
+      flink.jvm.cpu.load:
+        enabled: true
+      flink.jvm.cpu.time:
+        enabled: true
+      flink.jvm.memory.heap.used:
+        enabled: true
+      flink.jvm.memory.heap.committed:
+        enabled: true
+      flink.jvm.memory.heap.max:
+        enabled: true
+      flink.jvm.memory.metaspace.used:
+        enabled: true
+      flink.jvm.memory.nonheap.used:
+        enabled: true
+      flink.jvm.memory.nonheap.committed:
+        enabled: true
+      flink.jvm.memory.direct.used:
+        enabled: true
+      flink.jvm.memory.mapped.used:
+        enabled: true
+      flink.jvm.gc.collections.count:
+        enabled: true
+      flink.jvm.gc.collections.time:
+        enabled: true
+      flink.jvm.threads.count:
+        enabled: true
+      flink.jvm.class_loader.classes_loaded:
+        enabled: true
+      flink.memory.managed.used:
+        enabled: true
+      flink.memory.managed.total:
+        enabled: true
+      flink.job.restart.count:
+        enabled: true
+      flink.job.last_checkpoint.time:
+        enabled: true
+      flink.job.last_checkpoint.size:
+        enabled: true
+      flink.task.record.count:
+        enabled: true
+      flink.operator.record.count:
+        enabled: true
+      flink.operator.watermark.output:
+        enabled: true

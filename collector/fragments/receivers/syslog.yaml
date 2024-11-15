@@ -1,0 +1,32 @@
+# Syslog Receiver
+# Receives syslog messages over TCP supporting RFC 5424 and RFC 3164 formats.
+# Suitable for collecting logs from network devices, legacy systems, and Linux syslog.
+receivers:
+  syslog:
+    # TCP endpoint to listen on for syslog messages
+    tcp:
+      # Bind address and port (note: port 514 may require elevated privileges)
+      listen_address: ${SYSLOG_ENDPOINT:-0.0.0.0:514}
+      # Maximum number of concurrent TCP connections
+      max_log_size: ${SYSLOG_MAX_LOG_SIZE:-1048576}
+    # Syslog protocol to parse (rfc5424 is preferred; rfc3164 for legacy devices)
+    protocol: ${SYSLOG_PROTOCOL:-rfc5424}
+    # Optional: UDP listener (uncomment for UDP syslog)
+    # udp:
+    #   listen_address: ${SYSLOG_UDP_ENDPOINT:-0.0.0.0:514}
+    # Location for timestamp parsing when timezone is not specified in the message
+    location: ${SYSLOG_TIMEZONE:-UTC}
+    # Enable TLS for encrypted syslog (RFC 5425 syslog over TLS)
+    # tls:
+    #   cert_file: ${SYSLOG_TLS_CERT_FILE}
+    #   key_file: ${SYSLOG_TLS_KEY_FILE}
+    #   ca_file: ${SYSLOG_TLS_CA_FILE}
+    # Operators for additional parsing
+    operators:
+      # Move facility and priority to resource attributes for routing
+      - type: move
+        from: attributes.appname
+        to: resource["syslog.appname"]
+      - type: move
+        from: attributes.hostname
+        to: resource["syslog.hostname"]

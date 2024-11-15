@@ -1,0 +1,201 @@
+# AWS CloudWatch Receiver — ElastiCache
+# Pulls ElastiCache metrics for both Redis and Memcached clusters.
+# Covers cache hit/miss ratio, evictions, replication, CPU, memory,
+# connections, and engine-specific metrics.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where ElastiCache clusters reside
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-elasticache.yaml
+receivers:
+  awscloudwatch/elasticache:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # ElastiCache Host-Level Metrics (Redis + Memcached)
+        # -----------------------------------------------------------------
+        - namespace: AWS/ElastiCache
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- CPU ---
+            - metric_name: CPUUtilization
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: EngineCPUUtilization
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Memory ---
+            - metric_name: FreeableMemory
+              statistics:
+                - Average
+                - Minimum
+            - metric_name: BytesUsedForCache
+              statistics:
+                - Average
+            - metric_name: DatabaseMemoryUsagePercentage
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: DatabaseMemoryUsageCountedForEvictPercentage
+              statistics:
+                - Average
+
+            # --- Connections ---
+            - metric_name: CurrConnections
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: NewConnections
+              statistics:
+                - Sum
+
+            # --- Network ---
+            - metric_name: NetworkBytesIn
+              statistics:
+                - Sum
+            - metric_name: NetworkBytesOut
+              statistics:
+                - Sum
+            - metric_name: NetworkPacketsIn
+              statistics:
+                - Sum
+            - metric_name: NetworkPacketsOut
+              statistics:
+                - Sum
+            - metric_name: NetworkBandwidthInAllowanceExceeded
+              statistics:
+                - Sum
+            - metric_name: NetworkBandwidthOutAllowanceExceeded
+              statistics:
+                - Sum
+
+            # --- Cache Performance ---
+            - metric_name: CacheHits
+              statistics:
+                - Sum
+            - metric_name: CacheMisses
+              statistics:
+                - Sum
+            - metric_name: CacheHitRate
+              statistics:
+                - Average
+            - metric_name: Evictions
+              statistics:
+                - Sum
+            - metric_name: Reclaimed
+              statistics:
+                - Sum
+
+            # --- Swap ---
+            - metric_name: SwapUsage
+              statistics:
+                - Average
+
+            # --- Redis Specific ---
+            # Replication
+            - metric_name: ReplicationLag
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: ReplicationBytes
+              statistics:
+                - Sum
+
+            # Keyspace
+            - metric_name: CurrItems
+              statistics:
+                - Average
+            - metric_name: KeysTracked
+              statistics:
+                - Average
+
+            # Commands
+            - metric_name: GetTypeCmds
+              statistics:
+                - Sum
+            - metric_name: SetTypeCmds
+              statistics:
+                - Sum
+            - metric_name: KeyBasedCmds
+              statistics:
+                - Sum
+            - metric_name: StringBasedCmds
+              statistics:
+                - Sum
+            - metric_name: HashBasedCmds
+              statistics:
+                - Sum
+            - metric_name: ListBasedCmds
+              statistics:
+                - Sum
+            - metric_name: SetBasedCmds
+              statistics:
+                - Sum
+            - metric_name: SortedSetBasedCmds
+              statistics:
+                - Sum
+            - metric_name: StreamBasedCmds
+              statistics:
+                - Sum
+            - metric_name: HyperLogLogBasedCmds
+              statistics:
+                - Sum
+
+            # Backup & Save
+            - metric_name: SaveInProgress
+              statistics:
+                - Average
+
+            # Global Datastore (Redis)
+            - metric_name: GlobalDatastoreReplicationLag
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Memcached Specific ---
+            - metric_name: CmdGet
+              statistics:
+                - Sum
+            - metric_name: CmdSet
+              statistics:
+                - Sum
+            - metric_name: DeleteHits
+              statistics:
+                - Sum
+            - metric_name: DeleteMisses
+              statistics:
+                - Sum
+            - metric_name: GetHits
+              statistics:
+                - Sum
+            - metric_name: GetMisses
+              statistics:
+                - Sum
+            - metric_name: IncrHits
+              statistics:
+                - Sum
+            - metric_name: DecrHits
+              statistics:
+                - Sum
+            - metric_name: CasBadval
+              statistics:
+                - Sum
+            - metric_name: CasHits
+              statistics:
+                - Sum
+            - metric_name: CasMisses
+              statistics:
+                - Sum
+            - metric_name: SlabsMoved
+              statistics:
+                - Sum

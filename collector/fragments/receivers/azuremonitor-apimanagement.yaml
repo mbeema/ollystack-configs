@@ -1,0 +1,52 @@
+# Azure Monitor Receiver — API Management
+# Pulls metrics from Azure API Management (APIM) via Azure Monitor API.
+# Covers request counts, capacity, latency, failures, and gateway metrics.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-apimanagement.yaml
+receivers:
+  azuremonitor/apimanagement:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.ApiManagement/service
+            metrics:
+              # --- Request Volume ---
+              - name: Requests
+              - name: TotalRequests
+              - name: SuccessfulRequests
+              - name: FailedRequests
+              - name: UnauthorizedRequests
+              - name: OtherRequests
+
+              # --- Capacity ---
+              - name: Capacity
+
+              # --- Latency ---
+              - name: Duration
+              - name: BackendDuration
+
+              # --- Gateway ---
+              - name: GatewayRequests
+              - name: GatewayResponseCodeCategory
+
+              # --- Events ---
+              - name: EventHubTotalEvents
+              - name: EventHubSuccessfulEvents
+              - name: EventHubTotalFailedEvents
+              - name: EventHubRejectedEvents
+              - name: EventHubThrottledEvents
+              - name: EventHubTimedoutEvents
+              - name: EventHubDroppedEvents
+              - name: EventHubTotalBytesSent
+
+              # --- Network ---
+              - name: NetworkConnectivity

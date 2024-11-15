@@ -1,0 +1,17 @@
+# Zipkin Receiver
+# Receives trace spans in Zipkin v1/v2 JSON or Thrift format.
+# Provides backward compatibility with Zipkin-instrumented applications.
+receivers:
+  zipkin:
+    # HTTP endpoint to receive Zipkin spans (standard Zipkin port)
+    endpoint: ${ZIPKIN_ENDPOINT:-0.0.0.0:9411}
+    # Parse string tags to determine their types (bool, int, float)
+    parse_string_tags: ${ZIPKIN_PARSE_STRING_TAGS:-true}
+    # CORS configuration for browser-based Zipkin exporters
+    # cors:
+    #   allowed_origins: ["*"]
+    #   allowed_headers: ["*"]
+    # TLS configuration (optional)
+    # tls:
+    #   cert_file: ${ZIPKIN_TLS_CERT_FILE}
+    #   key_file: ${ZIPKIN_TLS_KEY_FILE}

@@ -1,0 +1,19 @@
+# Google Cloud Pub/Sub Receiver
+# Consumes telemetry data from a Google Cloud Pub/Sub subscription.
+# Useful for decoupling data producers from the collector via a message queue.
+receivers:
+  googlecloudpubsub:
+    # GCP project containing the Pub/Sub subscription
+    project: ${GCP_PROJECT_ID}
+    # Pub/Sub subscription ID to consume messages from
+    subscription: ${GCP_PUBSUB_SUBSCRIPTION}
+    # Encoding of the messages (otlp_proto_trace, otlp_proto_metric, otlp_proto_log, raw_text)
+    encoding: ${GCP_PUBSUB_ENCODING:-otlp_proto_log}
+    # Maximum number of unprocessed messages (flow control)
+    max_outstanding_messages: ${GCP_PUBSUB_MAX_OUTSTANDING:-1000}
+    # Maximum total size of unprocessed messages in bytes
+    max_outstanding_bytes: ${GCP_PUBSUB_MAX_OUTSTANDING_BYTES:-104857600}
+    # Number of concurrent message processing goroutines
+    num_goroutines: ${GCP_PUBSUB_NUM_GOROUTINES:-10}
+    # Optional: credentials file path (defaults to GOOGLE_APPLICATION_CREDENTIALS)
+    # credentials_file: ${GOOGLE_APPLICATION_CREDENTIALS}

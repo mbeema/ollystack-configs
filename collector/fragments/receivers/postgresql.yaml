@@ -1,0 +1,18 @@
+# PostgreSQL Receiver
+# Collects performance metrics from PostgreSQL databases.
+# Monitors connections, transactions, locks, replication lag, table/index stats.
+#
+# Required: PostgreSQL user with pg_monitor role (or superuser for full stats).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=postgresql.yaml
+receivers:
+  postgresql:
+    endpoint: ${POSTGRESQL_ENDPOINT:-localhost:5432}
+    username: ${POSTGRESQL_USERNAME:-postgres}
+    password: ${POSTGRESQL_PASSWORD}
+    databases:
+      - ${POSTGRESQL_DATABASE:-postgres}
+    collection_interval: ${POSTGRESQL_INTERVAL:-60s}
+    tls:
+      insecure: ${POSTGRESQL_TLS_INSECURE:-true}

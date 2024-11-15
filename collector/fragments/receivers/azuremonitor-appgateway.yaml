@@ -1,0 +1,55 @@
+# Azure Monitor Receiver — Application Gateway
+# Pulls metrics from Azure Application Gateway (L7 load balancer) via Azure Monitor API.
+# Covers throughput, connections, response codes, latency, capacity, and backend health.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-appgateway.yaml
+receivers:
+  azuremonitor/appgateway:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.Network/applicationGateways
+            metrics:
+              # --- Throughput ---
+              - name: Throughput
+              - name: TotalRequests
+              - name: BytesReceived
+              - name: BytesSent
+
+              # --- Connections ---
+              - name: CurrentConnections
+              - name: NewConnectionsPerSecond
+              - name: RejectedConnections
+              - name: FailedRequests
+
+              # --- Response Codes ---
+              - name: ResponseStatus
+              - name: HealthyHostCount
+              - name: UnhealthyHostCount
+
+              # --- Latency ---
+              - name: ApplicationGatewayTotalTime
+              - name: BackendConnectTime
+              - name: BackendFirstByteResponseTime
+              - name: BackendLastByteResponseTime
+              - name: BackendResponseStatus
+
+              # --- Capacity Units ---
+              - name: CapacityUnits
+              - name: ComputeUnits
+              - name: EstimatedBilledCapacityUnits
+              - name: FixedBillableCapacityUnits
+
+              # --- WAF (if enabled) ---
+              - name: AzwafTotalRequests
+              - name: AzwafBlockedRequests
+              - name: AzwafBotProtectionMatches

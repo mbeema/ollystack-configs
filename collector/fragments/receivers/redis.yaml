@@ -1,0 +1,16 @@
+# Redis Receiver
+# Collects performance metrics from Redis instances.
+# Monitors memory, connections, keyspace, commands, replication, and persistence.
+#
+# Required: Redis connection (password if AUTH is enabled).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=redis.yaml
+receivers:
+  redis:
+    endpoint: ${REDIS_ENDPOINT:-localhost:6379}
+    # Password (if Redis AUTH is enabled)
+    password: ${REDIS_PASSWORD:-}
+    collection_interval: ${REDIS_INTERVAL:-60s}
+    tls:
+      insecure: ${REDIS_TLS_INSECURE:-true}

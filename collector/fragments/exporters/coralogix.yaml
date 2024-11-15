@@ -1,0 +1,26 @@
+# Coralogix Exporter
+# Exports traces, metrics, and logs to Coralogix observability platform.
+#
+# Required: Coralogix API key (Send-Your-Data key from Settings > API Keys).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=coralogix.yaml
+exporters:
+  coralogix:
+    # Coralogix domain endpoint
+    domain: ${CORALOGIX_DOMAIN:-coralogix.com}
+    # API key for data ingestion
+    private_key: ${CORALOGIX_API_KEY}
+    # Application and subsystem names
+    application_name: ${CORALOGIX_APP_NAME:-default}
+    subsystem_name: ${CORALOGIX_SUBSYSTEM:-default}
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

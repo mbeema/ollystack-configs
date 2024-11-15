@@ -1,0 +1,7 @@
+# zPages Extension
+# Provides in-process diagnostic pages for pipeline debugging.
+# Endpoints: /debug/tracez, /debug/pipelinez, /debug/extensionz
+
+extensions:
+  zpages:
+    endpoint: "0.0.0.0:${OTEL_ZPAGES_PORT:-55679}"

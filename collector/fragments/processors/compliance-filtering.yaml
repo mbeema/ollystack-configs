@@ -1,0 +1,47 @@
+# Compliance Filtering Processor
+# Routes and tags telemetry by compliance framework requirements.
+# Ensures audit-relevant logs are preserved with full fidelity while
+# non-compliance data follows normal cost optimization pipelines.
+#
+# Supports: PCI-DSS 4.0 (Requirement 10), HIPAA (§164.312),
+# SOX (Section 404), SOC 2 (CC6/CC7), GDPR (Art. 30), FedRAMP.
+#
+# Compliance logs are tagged with the applicable framework and
+# retention requirement, enabling downstream routing to long-term
+# storage (S3, Azure Blob, GCS) with appropriate retention policies.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=compliance-filtering.yaml
+processors:
+  transform/compliance:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # ── PCI-DSS 4.0 Requirement 10: Log and Monitor All Access ──
+          # Tag authentication, authorization, and payment events
+          - set(attributes["compliance.framework"], "PCI-DSS") where IsMatch(body, "(?i)(payment|cardholder|card.number|cvv|auth.*(success|fail)|access.*(grant|deny|revoke)|firewall|ids|ips)")
+          - set(attributes["compliance.retention_days"], "365") where attributes["compliance.framework"] == "PCI-DSS"
+          - set(attributes["compliance.requirement"], "Req-10") where attributes["compliance.framework"] == "PCI-DSS"
+
+          # ── HIPAA §164.312: Technical Safeguards ──
+          # Tag PHI access, audit controls, and transmission security
+          - set(attributes["compliance.framework"], "HIPAA") where IsMatch(body, "(?i)(patient|medical|health.record|phi|hipaa|ehr|dicom|hl7|fhir|prescription|diagnosis)") and attributes["compliance.framework"] == nil
+          - set(attributes["compliance.retention_days"], "2190") where attributes["compliance.framework"] == "HIPAA"
+          - set(attributes["compliance.requirement"], "164.312") where attributes["compliance.framework"] == "HIPAA"
+
+          # ── SOX Section 404: Financial Controls ──
+          - set(attributes["compliance.framework"], "SOX") where IsMatch(body, "(?i)(financial|ledger|journal.entry|invoice|accounts.(payable|receivable)|audit.trail|fiscal|revenue|expense)") and attributes["compliance.framework"] == nil
+          - set(attributes["compliance.retention_days"], "2555") where attributes["compliance.framework"] == "SOX"
+          - set(attributes["compliance.requirement"], "Sec-404") where attributes["compliance.framework"] == "SOX"
+
+          # ── SOC 2 CC6/CC7: Logical Access and System Operations ──
+          - set(attributes["compliance.framework"], "SOC2") where IsMatch(body, "(?i)(access.control|user.(creat|delet|modif|disabl)|role.(assign|revoke)|mfa|privilege|permission.(change|grant))") and attributes["compliance.framework"] == nil
+          - set(attributes["compliance.retention_days"], "365") where attributes["compliance.framework"] == "SOC2"
+
+          # ── GDPR Article 30: Records of Processing Activities ──
+          - set(attributes["compliance.framework"], "GDPR") where IsMatch(body, "(?i)(personal.data|data.subject|consent|right.to.(erasure|access|portability)|dpo|data.protection|gdpr|processing.activit)") and attributes["compliance.framework"] == nil
+          - set(attributes["compliance.retention_days"], "1095") where attributes["compliance.framework"] == "GDPR"
+
+          # ── General Audit: Mark all compliance-tagged logs as audit-required ──
+          - set(attributes["compliance.audit_required"], "true") where attributes["compliance.framework"] != nil

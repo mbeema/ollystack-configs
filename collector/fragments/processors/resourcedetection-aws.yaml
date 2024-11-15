@@ -1,0 +1,20 @@
+# Resource detection processor for AWS environments.
+# Automatically detects EC2 instance metadata, ECS task/container info, and EKS cluster details.
+processors:
+  resourcedetection/aws:
+    detectors:
+      # EC2 instance metadata (instance ID, type, region, availability zone, AMI)
+      - ec2
+      # ECS task and container metadata (task ARN, cluster, family, revision)
+      - ecs
+      # EKS cluster metadata (cluster name)
+      - eks
+    # Do not override existing resource attributes
+    override: false
+    # Timeout for metadata endpoint calls
+    timeout: 5s
+    ec2:
+      # Fetch tags from EC2 instance (requires IAM permissions)
+      tags:
+        - ^service\.name$
+        - ^environment$

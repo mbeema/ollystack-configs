@@ -1,0 +1,27 @@
+# Transform processor for metrics - rename metrics, convert types, manipulate datapoints.
+# Uses OTTL (OpenTelemetry Transformation Language) statements.
+processors:
+  transform/metrics:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          # Rename metrics to conform to a naming convention
+          - set(name, "system.cpu.utilization") where name == "system.cpu.usage"
+          - set(name, "system.memory.utilization") where name == "system.memory.usage"
+          - set(description, Concat([name, " - transformed"], " ")) where description == ""
+
+      - context: datapoint
+        statements:
+          # Add a static attribute to all datapoints
+          - set(attributes["collector.pipeline"], "metrics-transform")
+
+          # Convert units or scale values if needed
+          # Example: convert bytes to megabytes
+          # - set(value_double, value_double / 1048576.0) where metric.name == "system.memory.usage"
+
+          # Remove high-cardinality attributes to reduce cost
+          - delete_key(attributes, "host.ip") where metric.name == "system.network.io"
+
+          # Round values for cleaner storage
+          # - set(value_double, Double(Int(value_double * 100.0)) / 100.0) where value_double != nil

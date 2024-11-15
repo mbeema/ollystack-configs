@@ -1,0 +1,47 @@
+# Metrics Cardinality Reduction
+# Strips high-cardinality attributes from metrics to reduce storage cost and
+# series explosion. These attributes are useful for debugging but create
+# massive cardinality in time-series databases.
+#
+# Typical cardinality savings: 40-70% reduction in active time series.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=filter-metrics-cardinality.yaml
+processors:
+  transform/reduce-cardinality:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          # ── Kubernetes high-cardinality attributes ──
+          # pod_uid changes on every restart — massive series churn
+          - delete_key(attributes, "k8s.pod.uid")
+          # container_id changes on every restart
+          - delete_key(attributes, "container.id")
+          # replica-set name embeds a hash, changes on every deploy
+          - delete_key(attributes, "k8s.replicaset.name")
+
+          # ── Network/host attributes ──
+          # Individual IPs create unbounded cardinality
+          - delete_key(attributes, "host.ip")
+          - delete_key(attributes, "net.host.ip")
+          - delete_key(attributes, "net.peer.ip")
+          - delete_key(attributes, "net.sock.peer.addr")
+          - delete_key(attributes, "net.sock.host.addr")
+          - delete_key(attributes, "client.address")
+          - delete_key(attributes, "server.address")
+
+          # ── HTTP high-cardinality attributes ──
+          # Full URLs contain query params with user-specific values
+          - delete_key(attributes, "http.url")
+          - delete_key(attributes, "url.full")
+          # Keep http.route (low cardinality) but drop http.target (high cardinality)
+          - delete_key(attributes, "http.target")
+          - delete_key(attributes, "url.path")
+
+          # ── Cloud instance-level attributes ──
+          # Instance IDs change with scaling events
+          - delete_key(attributes, "cloud.resource_id")
+          # Uncomment if you don't need per-instance metric breakdowns:
+          # - delete_key(attributes, "host.id")
+          # - delete_key(attributes, "host.name")

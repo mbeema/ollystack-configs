@@ -1,0 +1,48 @@
+# Kafka Exporter
+# Publishes telemetry to Apache Kafka for async processing, buffering, or fan-out.
+# Uses OTLP Protobuf encoding for schema compatibility.
+
+exporters:
+  kafka:
+    # Comma-separated broker addresses
+    brokers:
+      - ${KAFKA_BROKERS}
+
+    # Destination topic — one per signal type is recommended
+    topic: ${KAFKA_TOPIC}
+
+    # Encoding format: otlp_proto (recommended), otlp_json, jaeger_proto, zipkin_proto
+    encoding: otlp_proto
+
+    # Producer tuning for throughput and durability
+    producer:
+      # Maximum message size in bytes
+      max_message_bytes: ${KAFKA_MAX_MESSAGE_BYTES:-1048576}
+      # Required acks: 0=none, 1=leader, -1=all ISRs
+      required_acks: ${KAFKA_REQUIRED_ACKS:--1}
+      # Compression for wire efficiency: none, gzip, snappy, lz4, zstd
+      compression: gzip
+      # Flush frequency — higher values increase throughput at the cost of latency
+      flush_max_messages: 100
+
+    # SASL authentication (set protocol to "" to disable)
+    auth:
+      sasl:
+        mechanism: ${KAFKA_SASL_MECHANISM:-PLAIN}
+        username: ${KAFKA_SASL_USERNAME:-""}
+        password: ${KAFKA_SASL_PASSWORD:-""}
+      tls:
+        insecure: ${KAFKA_TLS_INSECURE:-false}
+        ca_file: ${KAFKA_TLS_CA_FILE:-""}
+
+    # Retry and queue settings for reliability
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

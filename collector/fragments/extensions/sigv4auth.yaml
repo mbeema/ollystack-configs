@@ -1,0 +1,14 @@
+# AWS SigV4 Authentication Extension
+# Signs outgoing requests with AWS Signature Version 4 credentials.
+# Used for authenticating with AWS services (e.g., X-Ray, AMP, CloudWatch).
+
+extensions:
+  sigv4auth:
+    # AWS region for the target service
+    region: "${AWS_REGION}"
+    # AWS service identifier (defaults to xray if not set)
+    service: "${AWS_SERVICE:-xray}"
+    # Optional: assume a specific IAM role for cross-account access
+    # assume_role:
+    #   arn: "${AWS_ASSUME_ROLE_ARN:-}"
+    #   sts_region: "${AWS_STS_REGION:-${AWS_REGION}}"

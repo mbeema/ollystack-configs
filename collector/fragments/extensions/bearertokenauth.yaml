@@ -1,0 +1,12 @@
+# Bearer Token Authentication Extension
+# Provides bearer token authentication for exporters and receivers.
+# The token is loaded from the OTEL_AUTH_TOKEN environment variable.
+
+extensions:
+  bearertokenauth:
+    # Token injected via environment variable -- never hardcode secrets
+    token: "${OTEL_AUTH_TOKEN}"
+    # Optional: specify a custom scheme (default: "Bearer")
+    # scheme: "Bearer"
+    # Optional: path to a file containing the token (alternative to inline token)
+    # filename: ""

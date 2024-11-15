@@ -1,0 +1,9 @@
+# UDP Log Receiver
+# Receives log data over UDP. Useful for collecting syslog-style messages
+# or any UDP-based log forwarding.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=udplog.yaml
+receivers:
+  udplog:
+    listen_address: ${UDPLOG_ENDPOINT:-0.0.0.0:54526}

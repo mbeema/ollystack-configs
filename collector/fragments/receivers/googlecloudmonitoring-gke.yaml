@@ -1,0 +1,62 @@
+# Google Cloud Monitoring Receiver — GKE (Google Kubernetes Engine)
+# Pulls GKE cluster, node, pod, and container metrics from Google Cloud Monitoring.
+# Covers CPU, memory, disk, network, and autoscaler metrics.
+#
+# Note: For in-cluster telemetry, use the platform config at
+# platforms/gcp/gke/ with kubeletstats/k8scluster receivers.
+# This fragment provides Google Cloud Monitoring metrics about the GKE
+# managed cluster, complementing in-cluster collection.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-gke.yaml
+receivers:
+  googlecloudmonitoring/gke:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Container Metrics ---
+      - metric_name: kubernetes.io/container/cpu/core_usage_time
+      - metric_name: kubernetes.io/container/cpu/limit_cores
+      - metric_name: kubernetes.io/container/cpu/request_cores
+      - metric_name: kubernetes.io/container/cpu/limit_utilization
+      - metric_name: kubernetes.io/container/cpu/request_utilization
+      - metric_name: kubernetes.io/container/memory/used_bytes
+      - metric_name: kubernetes.io/container/memory/limit_bytes
+      - metric_name: kubernetes.io/container/memory/request_bytes
+      - metric_name: kubernetes.io/container/memory/limit_utilization
+      - metric_name: kubernetes.io/container/memory/request_utilization
+      - metric_name: kubernetes.io/container/restart_count
+      - metric_name: kubernetes.io/container/ephemeral_storage/used_bytes
+      - metric_name: kubernetes.io/container/ephemeral_storage/limit_bytes
+
+      # --- Node Metrics ---
+      - metric_name: kubernetes.io/node/cpu/core_usage_time
+      - metric_name: kubernetes.io/node/cpu/total_cores
+      - metric_name: kubernetes.io/node/cpu/allocatable_cores
+      - metric_name: kubernetes.io/node/cpu/allocatable_utilization
+      - metric_name: kubernetes.io/node/memory/used_bytes
+      - metric_name: kubernetes.io/node/memory/total_bytes
+      - metric_name: kubernetes.io/node/memory/allocatable_bytes
+      - metric_name: kubernetes.io/node/memory/allocatable_utilization
+      - metric_name: kubernetes.io/node/network/received_bytes_count
+      - metric_name: kubernetes.io/node/network/sent_bytes_count
+      - metric_name: kubernetes.io/node/ephemeral_storage/used_bytes
+      - metric_name: kubernetes.io/node/ephemeral_storage/total_bytes
+      - metric_name: kubernetes.io/node/pid_used
+      - metric_name: kubernetes.io/node/pid_limit
+
+      # --- Pod Metrics ---
+      - metric_name: kubernetes.io/pod/network/received_bytes_count
+      - metric_name: kubernetes.io/pod/network/sent_bytes_count
+      - metric_name: kubernetes.io/pod/volume/used_bytes
+      - metric_name: kubernetes.io/pod/volume/total_bytes
+      - metric_name: kubernetes.io/pod/volume/utilization
+
+      # --- Autoscaler ---
+      - metric_name: autoscaler.googleapis.com/container/cpu/per_replica_recommended_request_cores
+      - metric_name: autoscaler.googleapis.com/container/memory/per_replica_recommended_request_bytes

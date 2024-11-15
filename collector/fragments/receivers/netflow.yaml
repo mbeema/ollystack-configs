@@ -1,0 +1,18 @@
+# NetFlow Receiver
+# Receives NetFlow v5, v9, IPFIX, and sFlow records from network devices.
+# Converts flow records into OpenTelemetry logs for network traffic analysis.
+#
+# Configure your routers/switches/firewalls to export flow data to
+# the collector's listening port.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=netflow.yaml
+receivers:
+  netflow:
+    # Listening endpoint for flow records
+    endpoint: ${NETFLOW_ENDPOINT:-0.0.0.0:2055}
+    # Queue size for incoming flow records
+    queue_size: ${NETFLOW_QUEUE_SIZE:-1000000}
+    # Workers to process incoming flow records
+    workers: ${NETFLOW_WORKERS:-2}
+    # Supported sockets and flow types are auto-detected

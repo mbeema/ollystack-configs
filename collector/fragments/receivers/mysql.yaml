@@ -1,0 +1,18 @@
+# MySQL Receiver
+# Collects performance metrics from MySQL/MariaDB databases.
+# Monitors connections, queries, buffer pool, replication, InnoDB stats.
+#
+# Required: MySQL user with PROCESS and REPLICATION CLIENT privileges.
+#   GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'otel'@'%';
+#
+# Usage:
+#   otelcol --config=base.yaml --config=mysql.yaml
+receivers:
+  mysql:
+    endpoint: ${MYSQL_ENDPOINT:-localhost:3306}
+    username: ${MYSQL_USERNAME:-otel}
+    password: ${MYSQL_PASSWORD}
+    database: ${MYSQL_DATABASE:-}
+    collection_interval: ${MYSQL_INTERVAL:-60s}
+    tls:
+      insecure: ${MYSQL_TLS_INSECURE:-true}

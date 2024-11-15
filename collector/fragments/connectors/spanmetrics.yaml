@@ -1,0 +1,46 @@
+# Span Metrics Connector
+# Generates RED (Rate, Error, Duration) metrics from span data.
+# Bridges the traces pipeline to the metrics pipeline.
+
+connectors:
+  spanmetrics:
+    # Metric namespace prefix for generated metrics
+    namespace: span.metrics
+
+    # Histogram configuration for latency distributions
+    histogram:
+      explicit:
+        buckets:
+          - 2ms
+          - 4ms
+          - 6ms
+          - 8ms
+          - 10ms
+          - 50ms
+          - 100ms
+          - 200ms
+          - 400ms
+          - 800ms
+          - 1s
+          - 5s
+          - 10s
+          - 30s
+          - 60s
+
+    # Dimensions extracted from span attributes and added as metric labels
+    dimensions:
+      - name: service.name
+      - name: span.kind
+      - name: http.method
+      - name: http.status_code
+      - name: rpc.method
+      - name: rpc.service
+
+    # Include resource attributes as dimensions
+    dimensions_cache_size: ${OTEL_SPANMETRICS_CACHE_SIZE:-1000}
+
+    # Aggregation temporality: AGGREGATION_TEMPORALITY_CUMULATIVE or AGGREGATION_TEMPORALITY_DELTA
+    aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
+
+    # Flush metrics on every span to avoid data loss
+    metrics_flush_interval: ${OTEL_SPANMETRICS_FLUSH_INTERVAL:-15s}

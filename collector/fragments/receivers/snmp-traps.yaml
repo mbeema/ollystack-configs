@@ -1,0 +1,51 @@
+# SNMP Trap Receiver (via syslog/UDP)
+# Receives SNMP traps forwarded by snmptrapd as syslog messages.
+# Captures asynchronous network device events: link up/down, fan
+# failure, temperature threshold, BGP neighbor changes, and
+# security events (login failures, config changes).
+#
+# Architecture: network devices → snmptrapd → syslog → OTel Collector
+#
+# snmptrapd converts traps to syslog format. Configure snmptrapd:
+#   snmptrapd.conf:
+#     authCommunity log,execute,net public
+#     format2 %V\n%v\n%W\n%q\n%A\n%a\n%B\n%b\n%w
+#     traphandle default /usr/bin/logger -t snmptrap -p local4.notice
+#
+# Or use snmptrapd with a script that forwards to OTel via OTLP.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=snmp-traps.yaml
+receivers:
+  # Receive traps forwarded as syslog from snmptrapd
+  syslog/snmp-traps:
+    udp:
+      listen_address: ${SNMP_TRAP_ENDPOINT:-0.0.0.0:1162}
+    protocol: ${SNMP_TRAP_PROTOCOL:-rfc5424}
+    location: ${SNMP_TRAP_TIMEZONE:-UTC}
+    operators:
+      # Tag as SNMP trap source
+      - type: add
+        field: resource["network.protocol"]
+        value: snmp-trap
+      - type: add
+        field: resource["security.category"]
+        value: network-device
+      # Parse trap-specific fields from syslog message
+      - type: regex_parser
+        regex: "(?P<oid>[0-9.]+)\\s+(?P<type>\\w+)\\s+(?P<value>.*)"
+        parse_from: body
+        if: body matches "^[0-9.]+"
+      # Move source hostname to resource
+      - type: move
+        from: attributes.hostname
+        to: resource["network.device.hostname"]
+        if: attributes.hostname != nil
+      # Severity mapping for common trap types
+      - type: severity_parser
+        parse_from: attributes.severity
+        if: attributes.severity != nil
+        mapping:
+          error: [0, 1, 2, 3]
+          warn: [4, 5]
+          info: [6, 7]

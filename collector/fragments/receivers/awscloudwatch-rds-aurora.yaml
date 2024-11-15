@@ -1,0 +1,244 @@
+# AWS CloudWatch Receiver — RDS & Aurora Enhanced
+# Pulls comprehensive RDS and Aurora metrics from CloudWatch.
+# Covers performance, storage, replication, networking, and Aurora cluster health.
+#
+# This is the ENHANCED version — the base awscloudwatch.yaml only covers
+# CPUUtilization, FreeableMemory, and DatabaseConnections. This fragment
+# adds IOPS, replication, storage, and Aurora-specific cluster metrics.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#   (Optional) pi:GetResourceMetrics  — for Performance Insights integration
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where RDS/Aurora instances reside
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-rds-aurora.yaml
+receivers:
+  awscloudwatch/rds:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # RDS Instance Metrics (applies to RDS MySQL, PostgreSQL, MariaDB,
+        # Oracle, SQL Server, and Aurora instances)
+        # -----------------------------------------------------------------
+        - namespace: AWS/RDS
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- CPU & Compute ---
+            - metric_name: CPUUtilization
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: CPUCreditBalance
+              statistics:
+                - Average
+            - metric_name: CPUCreditUsage
+              statistics:
+                - Average
+
+            # --- Memory ---
+            - metric_name: FreeableMemory
+              statistics:
+                - Average
+                - Minimum
+            - metric_name: SwapUsage
+              statistics:
+                - Average
+
+            # --- Connections ---
+            - metric_name: DatabaseConnections
+              statistics:
+                - Sum
+                - Maximum
+
+            # --- IOPS & Storage ---
+            - metric_name: ReadIOPS
+              statistics:
+                - Average
+            - metric_name: WriteIOPS
+              statistics:
+                - Average
+            - metric_name: ReadLatency
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: WriteLatency
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: ReadThroughput
+              statistics:
+                - Average
+            - metric_name: WriteThroughput
+              statistics:
+                - Average
+            - metric_name: DiskQueueDepth
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: FreeStorageSpace
+              statistics:
+                - Average
+                - Minimum
+            - metric_name: BurstBalance
+              statistics:
+                - Average
+                - Minimum
+
+            # --- Network ---
+            - metric_name: NetworkReceiveThroughput
+              statistics:
+                - Average
+            - metric_name: NetworkTransmitThroughput
+              statistics:
+                - Average
+
+            # --- Replication ---
+            - metric_name: ReplicaLag
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: OldestReplicationSlotLag
+              statistics:
+                - Average
+            - metric_name: ReplicationSlotDiskUsage
+              statistics:
+                - Average
+
+            # --- Transactions & Queries ---
+            - metric_name: Deadlocks
+              statistics:
+                - Sum
+            - metric_name: Queries
+              statistics:
+                - Average
+            - metric_name: CommitLatency
+              statistics:
+                - Average
+            - metric_name: CommitThroughput
+              statistics:
+                - Average
+            - metric_name: SelectLatency
+              statistics:
+                - Average
+            - metric_name: SelectThroughput
+              statistics:
+                - Average
+            - metric_name: DMLLatency
+              statistics:
+                - Average
+            - metric_name: DMLThroughput
+              statistics:
+                - Average
+            - metric_name: DDLLatency
+              statistics:
+                - Average
+            - metric_name: DDLThroughput
+              statistics:
+                - Average
+
+            # --- Binary Log / WAL ---
+            - metric_name: BinLogDiskUsage
+              statistics:
+                - Average
+            - metric_name: TransactionLogsDiskUsage
+              statistics:
+                - Average
+            - metric_name: TransactionLogsGeneration
+              statistics:
+                - Average
+
+            # --- Login & Connection Failures ---
+            - metric_name: LoginFailures
+              statistics:
+                - Sum
+            - metric_name: AbortedClients
+              statistics:
+                - Sum
+
+        # -----------------------------------------------------------------
+        # Aurora Cluster-Level Metrics
+        # These metrics are specific to Amazon Aurora (MySQL and PostgreSQL)
+        # -----------------------------------------------------------------
+        - namespace: AWS/RDS
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Aurora Cluster Health ---
+            - metric_name: AuroraReplicaLag
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: AuroraReplicaLagMaximum
+              statistics:
+                - Maximum
+            - metric_name: AuroraReplicaLagMinimum
+              statistics:
+                - Minimum
+            - metric_name: AuroraBinlogReplicaLag
+              statistics:
+                - Average
+
+            # --- Aurora Storage ---
+            - metric_name: VolumeBytesUsed
+              statistics:
+                - Average
+            - metric_name: VolumeReadIOPs
+              statistics:
+                - Average
+            - metric_name: VolumeWriteIOPs
+              statistics:
+                - Average
+            - metric_name: AuroraVolumeBytesLeftTotal
+              statistics:
+                - Average
+
+            # --- Aurora Serverless v2 ---
+            - metric_name: ServerlessDatabaseCapacity
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: ACUUtilization
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Aurora Backtrack ---
+            - metric_name: BacktrackChangeRecordsStored
+              statistics:
+                - Average
+            - metric_name: BacktrackChangeRecordsCreationRate
+              statistics:
+                - Average
+            - metric_name: BacktrackWindowActual
+              statistics:
+                - Average
+
+            # --- Aurora Global Database ---
+            - metric_name: AuroraGlobalDBReplicatedWriteIO
+              statistics:
+                - Sum
+            - metric_name: AuroraGlobalDBDataTransferBytes
+              statistics:
+                - Sum
+            - metric_name: AuroraGlobalDBReplicationLag
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Aurora Buffer Cache ---
+            - metric_name: BufferCacheHitRatio
+              statistics:
+                - Average
+            - metric_name: ResultSetCacheHitRatio
+              statistics:
+                - Average
+
+            # --- Aurora Engine Uptime ---
+            - metric_name: EngineUptime
+              statistics:
+                - Average

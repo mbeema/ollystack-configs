@@ -1,0 +1,17 @@
+# Active Directory Domain Services Receiver
+# Collects performance metrics from Active Directory Domain Services on Windows.
+# Monitors LDAP operations, replication, authentication, and directory stats.
+#
+# Requires: Windows OS, domain controller access, Performance Monitor permissions.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=activedirectoryds.yaml
+receivers:
+  active_directory_ds:
+    collection_interval: ${AD_COLLECTION_INTERVAL:-60s}
+    # Specific metrics can be enabled/disabled
+    metrics:
+      active_directory.ds.replication.sync.object.pending:
+        enabled: true
+      active_directory.ds.replication.sync.request.count:
+        enabled: true

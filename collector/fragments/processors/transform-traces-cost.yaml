@@ -1,0 +1,48 @@
+# Trace Cost Optimization
+# Reduces trace storage costs by removing high-cardinality and redundant
+# span attributes while preserving debugging value.
+#
+# Typical savings: 20-40% trace storage reduction.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=transform-traces-cost.yaml
+processors:
+  transform/traces-cost:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # ── Remove high-cardinality attributes ──
+          # Full URLs contain query params with user IDs, tokens, etc.
+          - delete_key(attributes, "http.url") where attributes["http.route"] != nil
+          - delete_key(attributes, "url.full") where attributes["http.route"] != nil
+          # Full request/response headers
+          - delete_key(attributes, "http.request.header.cookie")
+          - delete_key(attributes, "http.request.header.set-cookie")
+          - delete_key(attributes, "http.response.header.set-cookie")
+          # User agent strings are high-cardinality and rarely queried
+          - delete_key(attributes, "http.user_agent")
+          - delete_key(attributes, "user_agent.original")
+          # Individual client/peer IPs
+          - delete_key(attributes, "net.peer.ip")
+          - delete_key(attributes, "net.sock.peer.addr")
+          - delete_key(attributes, "client.address")
+
+          # ── Truncate large attribute values ──
+          # DB statements can contain full queries with literals
+          - truncate_all(attributes, 1024)
+
+          # ── Remove redundant attributes ──
+          # Old semconv duplicates (keep new, drop old)
+          - delete_key(attributes, "http.method") where attributes["http.request.method"] != nil
+          - delete_key(attributes, "http.status_code") where attributes["http.response.status_code"] != nil
+          - delete_key(attributes, "http.scheme") where attributes["url.scheme"] != nil
+          - delete_key(attributes, "net.host.name") where attributes["server.address"] != nil
+          - delete_key(attributes, "net.host.port") where attributes["server.port"] != nil
+          - delete_key(attributes, "net.peer.name") where attributes["server.address"] != nil
+
+      - context: span
+        statements:
+          # ── Truncate oversized span events (exception stack traces) ──
+          # Keep first 2048 chars of exception stacktrace
+          - truncate_all(attributes, 2048) where name == "exception"

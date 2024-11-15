@@ -1,0 +1,74 @@
+# Azure Monitor Receiver — Azure Cache for Redis
+# Pulls metrics from Azure Cache for Redis via Azure Monitor API.
+# Covers cache hit/miss, connections, server load, memory, latency, and replication.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-rediscache.yaml
+receivers:
+  azuremonitor/rediscache:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.Cache/redis
+            metrics:
+              # --- Cache Performance ---
+              - name: cachehits
+              - name: cachemisses
+              - name: cacheRead
+              - name: cacheWrite
+              - name: cacheLatency
+              - name: cachemissrate
+
+              # --- Server Load ---
+              - name: serverLoad
+              - name: percentProcessorTime
+
+              # --- Memory ---
+              - name: usedmemory
+              - name: usedmemorypercentage
+              - name: usedmemoryRss
+              - name: totalkeys
+              - name: expiredkeys
+              - name: evictedkeys
+
+              # --- Connections ---
+              - name: connectedclients
+              - name: totalcommandsprocessed
+              - name: operationsPerSecond
+              - name: getcommands
+              - name: setcommands
+
+              # --- Network ---
+              - name: cacheRead
+              - name: cacheWrite
+
+              # --- Replication (Premium/Enterprise with geo-replication) ---
+              - name: replicationLag
+              - name: connectedclients0
+              - name: serverLoad0
+
+              # --- Errors ---
+              - name: errors
+
+          # -----------------------------------------------------------------
+          # Azure Cache for Redis Enterprise
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Cache/redisEnterprise/databases
+            metrics:
+              - name: operationsPerSecond
+              - name: connectedClients
+              - name: usedMemoryPercentage
+              - name: cacheLatency
+              - name: cacheHits
+              - name: cacheMisses
+              - name: evictedKeys
+              - name: expiredKeys
+              - name: geoReplicationHealthy

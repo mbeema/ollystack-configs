@@ -1,0 +1,15 @@
+# Splunk HEC Receiver
+# Receives logs, metrics, and events in Splunk HTTP Event Collector (HEC) format.
+# Use this to accept data from existing Splunk forwarders or applications that
+# already emit data in HEC format, enabling migration to OpenTelemetry.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=splunkhec-receiver.yaml
+receivers:
+  splunk_hec:
+    endpoint: ${SPLUNK_HEC_RECEIVER_ENDPOINT:-0.0.0.0:8088}
+    # Optional: require valid HEC token
+    # access_token_passthrough: true
+    tls:
+      cert_file: ${SPLUNK_HEC_TLS_CERT:-}
+      key_file: ${SPLUNK_HEC_TLS_KEY:-}

@@ -1,0 +1,70 @@
+# Cilium Tetragon Receiver (via JSON log + Prometheus)
+# Collects security events from Tetragon, Cilium's eBPF-based runtime
+# security and observability tool. Unlike Falco, Tetragon provides
+# in-kernel enforcement (SIGKILL, override) without userspace round-trips.
+#
+# Covers: process execution, file access, network connections, privilege
+# changes, namespace escapes, and TracingPolicy-defined custom events.
+#
+# Tetragon outputs events as JSON logs and exposes Prometheus metrics.
+#
+# Install: helm install tetragon cilium/tetragon -n kube-system
+#
+# Usage:
+#   otelcol --config=base.yaml --config=tetragon.yaml
+receivers:
+  # Tetragon JSON event log (primary event source)
+  filelog/tetragon:
+    include:
+      - ${TETRAGON_LOG_PATH:-/var/run/cilium/tetragon/tetragon.log}
+    start_at: ${TETRAGON_START_AT:-end}
+    operators:
+      # Parse Tetragon JSON events
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.time
+          layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+      # Map Tetragon process_exec, process_exit, process_kprobe events
+      - type: add
+        field: resource["security.tool"]
+        value: tetragon
+      - type: add
+        field: resource["security.category"]
+        value: runtime-enforcement
+      # Extract event type
+      - type: move
+        from: attributes.process_exec
+        to: attributes["tetragon.event_type"]
+        if: attributes.process_exec != nil
+      # Extract process info
+      - type: move
+        from: attributes.process.binary
+        to: attributes["process.executable.path"]
+        if: attributes.process != nil
+      - type: move
+        from: attributes.process.arguments
+        to: attributes["process.command_args"]
+        if: attributes.process != nil
+      # Map severity based on event type
+      - type: severity_parser
+        parse_from: attributes["tetragon.event_type"]
+        mapping:
+          error: [process_kprobe, process_tracepoint]
+          warn: [process_exec, process_exit]
+          info: [process_loader]
+
+  # Tetragon Prometheus metrics (aggregate counters)
+  prometheus/tetragon:
+    config:
+      scrape_configs:
+        - job_name: tetragon
+          scrape_interval: ${TETRAGON_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${TETRAGON_TARGETS:-["localhost:2112"]}
+              labels:
+                component: security
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "tetragon_(events_total|policy_events_total|enforcer_events_total|errors_total|map_in_use_gauge|process_cache_size|ringbuf_events_received_total|ringbuf_events_lost_total)"

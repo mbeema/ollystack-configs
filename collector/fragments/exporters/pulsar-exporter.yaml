@@ -1,0 +1,21 @@
+# Apache Pulsar Exporter
+# Exports telemetry data to Apache Pulsar topics.
+# Supports traces, metrics, and logs export to Pulsar messaging.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=pulsar-exporter.yaml
+exporters:
+  pulsar:
+    endpoint: ${PULSAR_ENDPOINT:-pulsar://localhost:6650}
+    topic: ${PULSAR_EXPORT_TOPIC:-persistent://public/default/otlp-spans}
+    encoding: ${PULSAR_ENCODING:-otlp_proto}
+    producer_name: ${PULSAR_PRODUCER_NAME:-otel-collector}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

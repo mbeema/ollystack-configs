@@ -1,0 +1,52 @@
+# Count Connector
+# Generates count metrics from spans, logs, and metric data points.
+# Bridges any pipeline to the metrics pipeline by counting items
+# that match specified conditions.
+#
+# Use cases: track error rates, count log events by severity,
+# measure throughput without full metric instrumentation,
+# and generate cardinality-aware counters from trace data.
+
+connectors:
+  count:
+    spans:
+      # Count all spans by default
+      span.count:
+        description: Total span count
+      # Count error spans
+      span.errors.count:
+        description: Error span count
+        conditions:
+          - status.code == STATUS_CODE_ERROR
+      # Count spans by DB system (database query throughput)
+      span.db.count:
+        description: Database span count
+        conditions:
+          - attributes["db.system"] != nil
+
+    spanevents:
+      # Count exception events
+      span.exception.count:
+        description: Exception event count
+        conditions:
+          - name == "exception"
+
+    logs:
+      # Count all log records
+      log.count:
+        description: Total log record count
+      # Count error and above
+      log.errors.count:
+        description: Error+ log count
+        conditions:
+          - severity_number >= SEVERITY_NUMBER_ERROR
+      # Count security events (if security enrichment processor is used)
+      log.security.count:
+        description: Security event count
+        conditions:
+          - attributes["security.severity"] != nil
+
+    metrics:
+      # Count metric data points (useful for cardinality tracking)
+      metric.datapoint.count:
+        description: Metric data point count

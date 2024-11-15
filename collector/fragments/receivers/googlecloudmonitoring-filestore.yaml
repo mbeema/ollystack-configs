@@ -1,0 +1,31 @@
+# Google Cloud Monitoring Receiver — Filestore
+# Pulls Filestore (managed NFS) metrics from Google Cloud Monitoring.
+# Covers capacity, read/write IOPS, throughput, and free space.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-filestore.yaml
+receivers:
+  googlecloudmonitoring/filestore:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Capacity ---
+      - metric_name: file.googleapis.com/nfs/server/used_bytes_percent
+      - metric_name: file.googleapis.com/nfs/server/free_bytes
+      - metric_name: file.googleapis.com/nfs/server/capacity
+
+      # --- Read/Write IOPS ---
+      - metric_name: file.googleapis.com/nfs/server/read_ops_count
+      - metric_name: file.googleapis.com/nfs/server/write_ops_count
+
+      # --- Read/Write Bytes ---
+      - metric_name: file.googleapis.com/nfs/server/read_bytes_count
+      - metric_name: file.googleapis.com/nfs/server/write_bytes_count
+
+      # --- Connections ---
+      - metric_name: file.googleapis.com/nfs/server/connected_client_count

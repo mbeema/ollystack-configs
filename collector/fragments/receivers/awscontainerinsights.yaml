@@ -1,0 +1,18 @@
+# AWS Container Insights Receiver
+# Collects container-level performance metrics from Amazon ECS and EKS.
+# Works with CloudWatch Container Insights to provide CPU, memory, network,
+# and disk metrics at container, task/pod, service, and cluster levels.
+#
+# Required IAM: CloudWatchAgentServerPolicy or equivalent.
+# Typically deployed as a DaemonSet (EKS) or sidecar (ECS).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscontainerinsights.yaml
+receivers:
+  awscontainerinsightreceiver:
+    collection_interval: ${CONTAINER_INSIGHTS_INTERVAL:-60s}
+    container_orchestrator: ${CONTAINER_ORCHESTRATOR:-eks}
+    cluster_name: ${CLUSTER_NAME}
+    # Enhanced metrics including accelerated computing (GPU)
+    # prefer_full_pod_name: true
+    # add_full_pod_name_metric_label: true

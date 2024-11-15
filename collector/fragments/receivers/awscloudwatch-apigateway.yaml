@@ -1,0 +1,87 @@
+# AWS CloudWatch Receiver — API Gateway
+# Pulls metrics from both API Gateway REST APIs and HTTP APIs.
+# Covers request counts, latency, errors, and integration metrics.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where API Gateway APIs reside
+#
+# Note: API Gateway must have CloudWatch metrics enabled.
+#       For REST APIs, enable per-method metrics in stage settings.
+#       For HTTP APIs, detailed metrics are enabled via the $default stage.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-apigateway.yaml
+receivers:
+  awscloudwatch/apigateway:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # API Gateway REST API (v1) Metrics
+        # Namespace: AWS/ApiGateway
+        # Dimensions: ApiName, Method, Resource, Stage
+        # -----------------------------------------------------------------
+        - namespace: AWS/ApiGateway
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # Request volume
+            - metric_name: Count
+              statistics:
+                - Sum
+            # Latency
+            - metric_name: Latency
+              statistics:
+                - Average
+                - Maximum
+                - p50
+                - p90
+                - p99
+            - metric_name: IntegrationLatency
+              statistics:
+                - Average
+                - Maximum
+                - p99
+            # Errors
+            - metric_name: 4XXError
+              statistics:
+                - Sum
+                - Average
+            - metric_name: 5XXError
+              statistics:
+                - Sum
+                - Average
+            # Cache (if API caching is enabled)
+            - metric_name: CacheHitCount
+              statistics:
+                - Sum
+            - metric_name: CacheMissCount
+              statistics:
+                - Sum
+
+        # -----------------------------------------------------------------
+        # API Gateway HTTP API (v2) & WebSocket Metrics
+        # Namespace: AWS/ApiGateway
+        # Dimensions: ApiId, Stage
+        # These share the same namespace but use ApiId dimension
+        # -----------------------------------------------------------------
+        # Note: HTTP APIs (v2) share the same CloudWatch namespace
+        # (AWS/ApiGateway) as REST APIs. The metrics above apply to both.
+        # Differentiation is by dimension (ApiName vs ApiId).
+        # Additional WebSocket-specific metrics:
+        - namespace: AWS/ApiGateway
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            - metric_name: ConnectCount
+              statistics:
+                - Sum
+            - metric_name: MessageCount
+              statistics:
+                - Sum
+            - metric_name: DisconnectCount
+              statistics:
+                - Sum

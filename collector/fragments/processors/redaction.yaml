@@ -1,0 +1,52 @@
+# Redaction Processor
+# Removes or masks sensitive data from span, metric, and log attributes.
+# Essential for compliance (GDPR, HIPAA, PCI-DSS) and preventing
+# sensitive data from reaching observability backends.
+#
+# How it works:
+# - allow_all_keys: false — only explicitly allowed keys pass through
+# - allowed_keys: attributes that are safe to keep
+# - blocked_values: regex patterns to mask (credit cards, SSNs, emails, etc.)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=redaction.yaml
+processors:
+  redaction:
+    # Only allow explicitly listed attribute keys (deny by default)
+    allow_all_keys: ${REDACTION_ALLOW_ALL:-true}
+    # Attribute keys to always allow (when allow_all_keys is false)
+    # allowed_keys:
+    #   - http.method
+    #   - http.status_code
+    #   - http.route
+    #   - service.name
+    #   - service.namespace
+    #   - deployment.environment
+    # Regex patterns to mask in attribute VALUES (applied to all attributes)
+    blocked_values:
+      # Credit card numbers (Visa, MasterCard, Amex patterns)
+      - "\\b[0-9]{4}[- ]?[0-9]{4}[- ]?[0-9]{4}[- ]?[0-9]{1,4}\\b"
+      # Social Security Numbers (US)
+      - "\\b[0-9]{3}-[0-9]{2}-[0-9]{4}\\b"
+      # Email addresses
+      - "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"
+      # Bearer tokens / API keys (common patterns)
+      - "(?i)(bearer\\s+)[a-zA-Z0-9\\-._~+/]+"
+      # AWS access key IDs
+      - "\\bAKIA[0-9A-Z]{16}\\b"
+      # AWS secret access keys (40 char base64)
+      - "(?i)(aws_secret_access_key|secret_key)\\s*[=:]\\s*[A-Za-z0-9/+=]{40}"
+      # Database connection strings (postgresql, mysql, mongodb, redis)
+      - "(?i)(postgres|mysql|mongodb|redis)://[^\\s\"'`]+"
+      # JWT tokens (three base64 segments separated by dots)
+      - "\\beyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+"
+      # OAuth tokens / refresh tokens
+      - "(?i)(access_token|refresh_token|client_secret)\\s*[=:]\\s*[A-Za-z0-9\\-._~+/]{16,}"
+      # GCP service account keys
+      - "(?i)\"private_key\"\\s*:\\s*\"-----BEGIN"
+      # Azure connection strings
+      - "(?i)(AccountKey|SharedAccessKey)=[A-Za-z0-9+/=]{30,}"
+      # Generic long secrets (hex or base64 strings > 32 chars after key= pattern)
+      - "(?i)(password|secret|token|apikey|api_key)\\s*[=:]\\s*[A-Za-z0-9+/=\\-._]{32,}"
+    # Summary diagnostic attribute (how many values were masked)
+    summary: debug

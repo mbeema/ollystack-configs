@@ -1,0 +1,13 @@
+# Performance Profiling Extension (pprof)
+# Exposes Go pprof endpoints for CPU/memory profiling and debugging.
+# Access profiles at http://<host>:<port>/debug/pprof/
+
+extensions:
+  pprof:
+    endpoint: "0.0.0.0:${OTEL_PPROF_PORT:-1777}"
+    # Block profile fraction (0 = disabled, 1 = every event)
+    block_profile_fraction: ${OTEL_PPROF_BLOCK_FRACTION:-0}
+    # Mutex profile fraction (0 = disabled)
+    mutex_profile_fraction: ${OTEL_PPROF_MUTEX_FRACTION:-0}
+    # Save pprof data to file (optional, leave empty to disable)
+    # save_to_file: ""

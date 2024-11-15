@@ -1,0 +1,12 @@
+# OpenCensus Receiver
+# Receives telemetry data from OpenCensus-instrumented applications.
+# Use this for backward compatibility during migration from OpenCensus to OpenTelemetry.
+#
+# Note: OpenCensus is deprecated. Migrate to OpenTelemetry when possible.
+# See: https://opentelemetry.io/docs/migration/opencensus/
+#
+# Usage:
+#   otelcol --config=base.yaml --config=opencensus.yaml
+receivers:
+  opencensus:
+    endpoint: ${OPENCENSUS_ENDPOINT:-0.0.0.0:55678}

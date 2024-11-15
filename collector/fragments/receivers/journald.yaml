@@ -1,0 +1,31 @@
+# Journald Receiver
+# Reads log entries from the systemd journal (journald).
+# Best for Linux hosts using systemd-based init systems.
+receivers:
+  journald:
+    # Directory containing journal files (default: /var/log/journal)
+    directory: ${JOURNALD_DIRECTORY:-/var/log/journal}
+    # Filter journal entries by systemd unit names
+    units: ${JOURNALD_UNITS:-[]}
+    # Priority level filter (0=emerg through 7=debug)
+    # Only entries at this priority or higher are collected
+    priority: ${JOURNALD_PRIORITY:-info}
+    # Start reading from the current position (avoids replaying full history)
+    start_at: ${JOURNALD_START_AT:-end}
+    # Parse operators for structured field extraction
+    operators:
+      # Move systemd unit name to a resource attribute for grouping
+      - type: move
+        from: attributes["_SYSTEMD_UNIT"]
+        to: resource["systemd.unit"]
+      # Map journal priority to OpenTelemetry severity
+      - type: severity_parser
+        parse_from: attributes["PRIORITY"]
+        mapping:
+          fatal: "0"
+          error: "3"
+          warn: "4"
+          info: "6"
+          debug: "7"
+    # Storage extension for checkpointing (persist read position across restarts)
+    # storage: file_storage

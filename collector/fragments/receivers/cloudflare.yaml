@@ -1,0 +1,21 @@
+# Cloudflare Receiver
+# Pulls logs from Cloudflare's Logpush service via the Logpull REST API.
+# Covers HTTP requests, firewall events, and Spectrum events.
+#
+# Required: Cloudflare API Token with Zone > Logs > Read permission.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=cloudflare.yaml
+receivers:
+  cloudflare:
+    # Cloudflare API token
+    api_token: ${CLOUDFLARE_API_TOKEN}
+    # Cloudflare Zone ID (from the dashboard Overview tab)
+    zone: ${CLOUDFLARE_ZONE_ID}
+    # Log types to collect
+    logs:
+      - http_requests
+      - firewall_events
+      - spectrum_events
+    # Polling interval
+    poll_interval: ${CLOUDFLARE_POLL_INTERVAL:-60s}

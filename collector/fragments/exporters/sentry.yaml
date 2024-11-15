@@ -1,0 +1,13 @@
+# Sentry Exporter
+# Exports traces (as Sentry transactions) to Sentry.
+# Useful for teams using Sentry for error tracking who want trace correlation.
+#
+# Required: Sentry DSN from Project Settings > Client Keys.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=sentry.yaml
+exporters:
+  sentry:
+    dsn: ${SENTRY_DSN}
+    # Optional: environment tag
+    environment: ${SENTRY_ENVIRONMENT:-production}

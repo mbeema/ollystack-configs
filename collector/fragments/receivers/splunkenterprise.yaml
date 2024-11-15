@@ -1,0 +1,55 @@
+# Splunk Enterprise Receiver
+# Pulls metrics from Splunk Enterprise deployment via the REST API.
+# Covers indexer health, search performance, license usage, and KV store.
+#
+# Required: Splunk user with admin or sc_admin role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=splunkenterprise.yaml
+receivers:
+  splunkenterprise:
+    endpoint: ${SPLUNK_ENDPOINT:-https://localhost:8089}
+    username: ${SPLUNK_USERNAME}
+    password: ${SPLUNK_PASSWORD}
+    collection_interval: ${SPLUNK_INTERVAL:-60s}
+    tls:
+      insecure_skip_verify: ${SPLUNK_INSECURE:-true}
+    metrics:
+      splunk.indexer.throughput:
+        enabled: true
+      splunk.indexer.avg.rate:
+        enabled: true
+      splunk.license.index.usage:
+        enabled: true
+      splunk.buckets.searchable.status:
+        enabled: true
+      splunk.indexes.size:
+        enabled: true
+      splunk.indexes.bucket.count:
+        enabled: true
+      splunk.indexes.raw.size:
+        enabled: true
+      splunk.indexes.bucket.event.count:
+        enabled: true
+      splunk.scheduler.avg.execution.latency:
+        enabled: true
+      splunk.scheduler.completion.ratio:
+        enabled: true
+      splunk.server.introspection.queues.current:
+        enabled: true
+      splunk.server.introspection.queues.current.bytes:
+        enabled: true
+      splunk.data.indexes.extended.bucket.count:
+        enabled: true
+      splunk.data.indexes.extended.event.count:
+        enabled: true
+      splunk.data.indexes.extended.raw.size:
+        enabled: true
+      splunk.data.indexes.extended.total.size:
+        enabled: true
+      splunk.data.indexes.extended.bucket.event.count:
+        enabled: true
+      splunk.data.indexes.extended.bucket.hot.count:
+        enabled: true
+      splunk.data.indexes.extended.bucket.warm.count:
+        enabled: true

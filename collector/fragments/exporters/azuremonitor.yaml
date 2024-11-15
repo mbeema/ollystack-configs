@@ -1,0 +1,27 @@
+# Azure Monitor / Application Insights Exporter
+# Sends traces, metrics, and logs to Azure Monitor via the Application Insights ingestion API.
+# Requires a valid connection string from the Azure Portal.
+
+exporters:
+  azuremonitor:
+    # Connection string from Azure Portal > Application Insights > Overview
+    connection_string: ${AZURE_MONITOR_CONNECTION_STRING}
+
+    # Batching controls — tune for throughput vs. latency
+    max_batch_size: 1024
+    max_batch_interval: 10s
+
+    # Span event handling — when true, span events are exported as custom events
+    spaneventsenabled: true
+
+    # Retry and queue settings for reliability
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

@@ -1,0 +1,49 @@
+# Azure Monitor Receiver — AKS (Azure Kubernetes Service)
+# Pulls AKS cluster-level metrics from Azure Monitor API.
+# Covers node/pod counts, resource allocation, API server health, and kube-state.
+#
+# Note: For in-cluster telemetry (kubelet, container metrics), use the
+# platform config at platforms/azure/aks/ with kubeletstats receiver.
+# This fragment provides Azure Monitor metrics about the AKS control plane
+# and managed cluster, complementing in-cluster collection.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-aks.yaml
+receivers:
+  azuremonitor/aks:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.ContainerService/managedClusters
+            metrics:
+              # --- Node Health ---
+              - name: kube_node_status_condition
+              - name: kube_node_status_allocatable
+              - name: node_cpu_usage_millicores
+              - name: node_cpu_usage_percentage
+              - name: node_memory_rss_bytes
+              - name: node_memory_rss_percentage
+              - name: node_memory_working_set_bytes
+              - name: node_memory_working_set_percentage
+              - name: node_disk_usage_bytes
+              - name: node_disk_usage_percentage
+              - name: node_network_in_bytes
+              - name: node_network_out_bytes
+
+              # --- Pod Health ---
+              - name: kube_pod_status_ready
+              - name: kube_pod_status_phase
+
+              # --- API Server ---
+              - name: cluster_autoscaler_cluster_safe_to_autoscale
+              - name: cluster_autoscaler_scale_down_in_cooldown
+              - name: cluster_autoscaler_unneeded_nodes_count
+              - name: cluster_autoscaler_unschedulable_pods_count

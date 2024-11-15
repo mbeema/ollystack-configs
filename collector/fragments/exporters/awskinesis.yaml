@@ -1,0 +1,28 @@
+# AWS Kinesis Exporter
+# Exports telemetry data to Amazon Kinesis Data Streams.
+# Useful for real-time streaming pipelines and event-driven architectures.
+#
+# Required IAM permissions:
+#   kinesis:PutRecords
+#   kinesis:DescribeStream
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awskinesis.yaml
+exporters:
+  awskinesis:
+    aws:
+      region: ${AWS_REGION}
+      stream_name: ${AWS_KINESIS_STREAM}
+      # Optional: role for cross-account
+      # role_arn: ${AWS_KINESIS_ROLE_ARN}
+    encoding:
+      name: ${AWS_KINESIS_ENCODING:-otlp_json}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000

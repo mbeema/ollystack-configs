@@ -1,0 +1,37 @@
+# IIS (Internet Information Services) Receiver
+# Pulls metrics from Microsoft IIS via Windows Performance Counters.
+# Covers requests, connections, bytes, cache, and application pool metrics.
+#
+# Platform: Windows only.
+# For Linux web servers, use apache.yaml or nginx.yaml instead.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=iis.yaml
+receivers:
+  iis:
+    collection_interval: ${IIS_INTERVAL:-60s}
+    metrics:
+      iis.connection.active:
+        enabled: true
+      iis.connection.anonymous:
+        enabled: true
+      iis.connection.attempt.count:
+        enabled: true
+      iis.network.blocked:
+        enabled: true
+      iis.network.file.count:
+        enabled: true
+      iis.network.io:
+        enabled: true
+      iis.request.count:
+        enabled: true
+      iis.request.queue.count:
+        enabled: true
+      iis.request.queue.age.max:
+        enabled: true
+      iis.request.rejected:
+        enabled: true
+      iis.thread.active:
+        enabled: true
+      iis.uptime:
+        enabled: true

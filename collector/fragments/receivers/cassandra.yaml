@@ -1,0 +1,30 @@
+# Apache Cassandra Receiver (via JMX)
+# Pulls metrics from Cassandra nodes via JMX using the built-in
+# cassandra target_system preset in the JMX receiver.
+#
+# Covers: read/write latency, compaction, memtable flush, tombstones,
+# SSTable counts, key cache hit rate, thread pools, heap usage,
+# garbage collection, and hint delivery.
+#
+# Required: JMX enabled on Cassandra nodes:
+#   JVM_OPTS="$JVM_OPTS -Dcom.sun.management.jmxremote.port=7199"
+#   JVM_OPTS="$JVM_OPTS -Dcom.sun.management.jmxremote.authenticate=false"
+#   JVM_OPTS="$JVM_OPTS -Dcom.sun.management.jmxremote.ssl=false"
+#
+# Usage:
+#   otelcol --config=base.yaml --config=cassandra.yaml
+receivers:
+  jmx/cassandra:
+    # JMX service URL for Cassandra node
+    endpoint: ${CASSANDRA_JMX_ENDPOINT:-service:jmx:rmi:///jndi/rmi://localhost:7199/jmxrmi}
+    # Use built-in Cassandra MBean query preset
+    target_system: cassandra
+    collection_interval: ${CASSANDRA_INTERVAL:-60s}
+    # Optional: JMX authentication (if enabled)
+    # username: ${CASSANDRA_JMX_USERNAME}
+    # password: ${CASSANDRA_JMX_PASSWORD}
+    # Path to the OTel JMX Metric Gatherer JAR
+    jar_path: ${JMX_JAR_PATH:-/opt/otel/opentelemetry-jmx-metrics.jar}
+    resource_attributes:
+      service.name: ${CASSANDRA_SERVICE_NAME:-cassandra}
+      db.system: cassandra

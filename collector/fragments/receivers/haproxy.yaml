@@ -1,0 +1,51 @@
+# HAProxy Receiver
+# Pulls metrics from HAProxy via the stats socket or stats HTTP endpoint.
+# Covers sessions, request rates, bytes in/out, error rates, and backend health.
+#
+# Required: HAProxy stats socket enabled or stats HTTP page.
+#   stats socket /var/run/haproxy.sock mode 666 level admin
+# Or:
+#   stats uri /haproxy?stats
+#
+# Usage:
+#   otelcol --config=base.yaml --config=haproxy.yaml
+receivers:
+  haproxy:
+    # Stats endpoint: unix socket or HTTP URL
+    endpoint: ${HAPROXY_ENDPOINT:-http://localhost:8404/stats}
+    collection_interval: ${HAPROXY_INTERVAL:-60s}
+    metrics:
+      haproxy.bytes.input:
+        enabled: true
+      haproxy.bytes.output:
+        enabled: true
+      haproxy.connections.errors:
+        enabled: true
+      haproxy.connections.rate:
+        enabled: true
+      haproxy.connections.retries:
+        enabled: true
+      haproxy.connections.total:
+        enabled: true
+      haproxy.requests.denied:
+        enabled: true
+      haproxy.requests.errors:
+        enabled: true
+      haproxy.requests.queued:
+        enabled: true
+      haproxy.requests.rate:
+        enabled: true
+      haproxy.requests.redispatched:
+        enabled: true
+      haproxy.requests.total:
+        enabled: true
+      haproxy.responses.errors:
+        enabled: true
+      haproxy.server_selected.total:
+        enabled: true
+      haproxy.sessions.average:
+        enabled: true
+      haproxy.sessions.count:
+        enabled: true
+      haproxy.sessions.rate:
+        enabled: true

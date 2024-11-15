@@ -1,0 +1,30 @@
+# Kubelet Stats Receiver
+# Collects node, pod, and container resource metrics from the kubelet /stats/summary API.
+# Must run as a DaemonSet with appropriate RBAC permissions.
+receivers:
+  kubeletstats:
+    # How often to collect kubelet stats
+    collection_interval: ${KUBELET_STATS_INTERVAL:-30s}
+    # Authentication type: serviceAccount uses the mounted SA token in-cluster
+    auth_type: ${KUBELET_AUTH_TYPE:-serviceAccount}
+    # Kubelet endpoint (typically the node's IP on port 10250)
+    endpoint: ${KUBELET_ENDPOINT:-https://${K8S_NODE_NAME}:10250}
+    # Skip TLS verification for self-signed kubelet certificates
+    insecure_skip_verify: ${KUBELET_INSECURE_SKIP_VERIFY:-true}
+    # Metric groups to collect
+    metric_groups:
+      # Node-level metrics (CPU, memory, network, filesystem)
+      - node
+      # Pod-level metrics (CPU, memory, network)
+      - pod
+      # Container-level metrics (CPU, memory, filesystem)
+      - container
+      # Persistent volume metrics
+      - volume
+    # Extra metadata attributes to enrich metrics
+    extra_metadata_labels:
+      - container.id
+      - k8s.volume.type
+    # Resource attribute configuration for Kubernetes metadata
+    k8s_api_config:
+      auth_type: ${KUBELET_AUTH_TYPE:-serviceAccount}

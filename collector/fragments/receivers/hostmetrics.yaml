@@ -1,0 +1,59 @@
+# Host Metrics Receiver
+# Collects system-level metrics from the host machine.
+# Useful for infrastructure monitoring on bare-metal or VM deployments.
+receivers:
+  hostmetrics:
+    # How often to scrape host metrics
+    collection_interval: ${HOST_METRICS_INTERVAL:-60s}
+    # Optional: restrict metrics to the cgroup of the collector process
+    # root_path: /hostfs
+    scrapers:
+      # CPU utilization metrics (per-core and aggregate)
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      # Memory usage metrics (used, free, cached, buffered)
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      # Disk I/O metrics (reads, writes, latency per device)
+      disk:
+        metrics:
+          system.disk.io:
+            enabled: true
+      # Filesystem usage metrics (used, free, inodes)
+      filesystem:
+        metrics:
+          system.filesystem.utilization:
+            enabled: true
+        # Exclude pseudo/virtual filesystems to reduce noise
+        exclude_mount_points:
+          mount_points: ["/proc", "/sys", "/dev", "/run"]
+          match_type: strict
+        exclude_fs_types:
+          fs_types: ["proc", "sysfs", "devfs", "tmpfs", "devtmpfs"]
+          match_type: strict
+      # Network interface metrics (bytes sent/received, errors, drops)
+      network:
+        metrics:
+          system.network.io:
+            enabled: true
+          system.network.connections:
+            enabled: true
+      # Per-process metrics (CPU, memory, disk I/O, open file descriptors)
+      process:
+        # Include all processes or filter by name regex
+        include:
+          match_type: regexp
+          names: ${HOST_METRICS_PROCESS_INCLUDE:-[".*"]}
+        metrics:
+          process.cpu.utilization:
+            enabled: true
+          process.memory.utilization:
+            enabled: true
+        # Mute errors for short-lived processes that disappear between scrapes
+        mute_process_name_error: true
+        mute_process_exe_error: true
+        mute_process_io_error: true

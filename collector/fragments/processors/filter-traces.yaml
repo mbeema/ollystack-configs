@@ -1,0 +1,22 @@
+# Filter processor for traces - drop health-check and synthetic monitoring spans.
+# Reduces trace storage costs by filtering low-value spans.
+processors:
+  filter/traces:
+    error_mode: ignore
+    traces:
+      span:
+        # Drop health check endpoint spans
+        - 'attributes["http.target"] == "/health"'
+        - 'attributes["http.target"] == "/healthz"'
+        - 'attributes["http.target"] == "/readyz"'
+        - 'attributes["http.target"] == "/livez"'
+        - 'attributes["http.route"] == "/health"'
+
+        # Drop synthetic monitoring / uptime check spans
+        - 'attributes["http.user_agent"] != nil and IsMatch(attributes["http.user_agent"], "(?i)(synthetic|uptime|pingdom|datadog-synthetics|blackbox-exporter)")'
+
+        # Drop Kubernetes probe spans
+        - 'attributes["http.user_agent"] != nil and IsMatch(attributes["http.user_agent"], "(?i)kube-probe")'
+
+        # Drop internal gRPC health check spans
+        - 'attributes["rpc.method"] == "Check" and attributes["rpc.service"] == "grpc.health.v1.Health"'

@@ -1,0 +1,30 @@
+# OTLP gRPC Exporter
+# Exports telemetry data over gRPC using the OpenTelemetry Protocol.
+# Includes mTLS, retry logic, and a persistent sending queue for reliability.
+
+exporters:
+  otlp/grpc:
+    # Target OTLP-compatible backend (e.g., Tempo, Jaeger, another collector)
+    endpoint: ${OTLP_GRPC_ENDPOINT}
+    timeout: 30s
+    compression: gzip
+
+    # Mutual TLS configuration for secure transport
+    tls:
+      cert_file: ${OTLP_GRPC_TLS_CERT_FILE}
+      key_file: ${OTLP_GRPC_TLS_KEY_FILE}
+      ca_file: ${OTLP_GRPC_TLS_CA_FILE}
+      insecure: ${OTLP_GRPC_TLS_INSECURE:-false}
+
+    # Retry policy — exponential backoff on transient failures
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    # Sending queue — buffers data to absorb back-pressure from the backend
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

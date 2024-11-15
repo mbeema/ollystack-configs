@@ -1,0 +1,61 @@
+# Google Cloud Monitoring Receiver — Cloud Load Balancing (Enhanced)
+# Pulls comprehensive metrics from all Google Cloud load balancer types.
+# Covers HTTP(S), TCP/SSL, and Internal load balancers.
+#
+# The base googlecloud.yaml only covers https/request_count and total_latencies.
+# This fragment provides full coverage across all LB types.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-loadbalancing.yaml
+receivers:
+  googlecloudmonitoring/loadbalancing:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # -----------------------------------------------------------------
+      # HTTPS Load Balancer (External & Internal)
+      # -----------------------------------------------------------------
+      - metric_name: loadbalancing.googleapis.com/https/request_count
+      - metric_name: loadbalancing.googleapis.com/https/total_latencies
+      - metric_name: loadbalancing.googleapis.com/https/request_bytes_count
+      - metric_name: loadbalancing.googleapis.com/https/response_bytes_count
+      - metric_name: loadbalancing.googleapis.com/https/backend_request_count
+      - metric_name: loadbalancing.googleapis.com/https/backend_request_bytes_count
+      - metric_name: loadbalancing.googleapis.com/https/backend_response_bytes_count
+      - metric_name: loadbalancing.googleapis.com/https/backend_latencies
+      - metric_name: loadbalancing.googleapis.com/https/frontend_tcp_rtt
+      - metric_name: loadbalancing.googleapis.com/https/internal/request_count
+      - metric_name: loadbalancing.googleapis.com/https/internal/total_latencies
+      - metric_name: loadbalancing.googleapis.com/https/internal/backend_latencies
+
+      # --- Backend Health ---
+      - metric_name: loadbalancing.googleapis.com/https/backend_connections
+      - metric_name: loadbalancing.googleapis.com/https/backend_connection_errors
+
+      # -----------------------------------------------------------------
+      # TCP/SSL Proxy Load Balancer
+      # -----------------------------------------------------------------
+      - metric_name: loadbalancing.googleapis.com/tcp_ssl_proxy/open_connections
+      - metric_name: loadbalancing.googleapis.com/tcp_ssl_proxy/new_connections
+      - metric_name: loadbalancing.googleapis.com/tcp_ssl_proxy/closed_connections
+      - metric_name: loadbalancing.googleapis.com/tcp_ssl_proxy/egress_bytes_count
+      - metric_name: loadbalancing.googleapis.com/tcp_ssl_proxy/ingress_bytes_count
+      - metric_name: loadbalancing.googleapis.com/tcp_ssl_proxy/frontend_tcp_rtt
+
+      # -----------------------------------------------------------------
+      # Network/Internal TCP/UDP Load Balancer
+      # -----------------------------------------------------------------
+      - metric_name: loadbalancing.googleapis.com/l3/internal/egress_bytes_count
+      - metric_name: loadbalancing.googleapis.com/l3/internal/egress_packets_count
+      - metric_name: loadbalancing.googleapis.com/l3/internal/ingress_bytes_count
+      - metric_name: loadbalancing.googleapis.com/l3/internal/ingress_packets_count
+      - metric_name: loadbalancing.googleapis.com/l3/internal/rtt_latencies
+      - metric_name: loadbalancing.googleapis.com/l3/external/egress_bytes_count
+      - metric_name: loadbalancing.googleapis.com/l3/external/egress_packets_count
+      - metric_name: loadbalancing.googleapis.com/l3/external/ingress_bytes_count
+      - metric_name: loadbalancing.googleapis.com/l3/external/ingress_packets_count

@@ -1,0 +1,21 @@
+# AWS Kinesis Data Firehose Receiver
+# Receives telemetry data sent from AWS Kinesis Data Firehose via HTTP endpoint.
+# Use this when routing CloudWatch Metrics Streams or other AWS data through Firehose.
+#
+# Firehose delivers data via HTTP PUT to the collector's endpoint.
+# Configure Firehose delivery stream with HTTP endpoint destination pointing here.
+#
+# Required: Access key for request validation.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awsfirehose.yaml
+receivers:
+  awsfirehose:
+    endpoint: ${FIREHOSE_ENDPOINT:-0.0.0.0:4433}
+    # Access key to validate incoming Firehose requests
+    access_key: ${FIREHOSE_ACCESS_KEY}
+    # Record type: cwmetrics (CloudWatch Metrics Streams) or otlp_v1
+    record_type: ${FIREHOSE_RECORD_TYPE:-cwmetrics}
+    tls:
+      cert_file: ${FIREHOSE_TLS_CERT:-}
+      key_file: ${FIREHOSE_TLS_KEY:-}

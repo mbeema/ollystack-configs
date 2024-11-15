@@ -1,0 +1,37 @@
+# Memcached Receiver
+# Pulls metrics from Memcached via the stats command over TCP.
+# Covers hit/miss ratio, evictions, connections, bytes, and operations.
+#
+# Note: For AWS ElastiCache Memcached, use awscloudwatch-elasticache.yaml.
+# For GCP Memorystore Memcached, use googlecloudmonitoring-memorystore.yaml.
+# This receiver connects directly to a Memcached instance.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=memcached.yaml
+receivers:
+  memcached:
+    endpoint: ${MEMCACHED_ENDPOINT:-localhost:11211}
+    collection_interval: ${MEMCACHED_INTERVAL:-60s}
+    metrics:
+      memcached.bytes:
+        enabled: true
+      memcached.commands:
+        enabled: true
+      memcached.connections.current:
+        enabled: true
+      memcached.connections.total:
+        enabled: true
+      memcached.cpu.usage:
+        enabled: true
+      memcached.current_items:
+        enabled: true
+      memcached.evictions:
+        enabled: true
+      memcached.network:
+        enabled: true
+      memcached.operation_hit_ratio:
+        enabled: true
+      memcached.operations:
+        enabled: true
+      memcached.threads:
+        enabled: true

@@ -1,0 +1,98 @@
+# VMware vCenter Receiver
+# Pulls metrics from VMware vCenter Server via the vSphere API.
+# Covers VMs, hosts, datastores, clusters, and resource pools.
+#
+# Required: vCenter user with at least Read-Only role on the root folder.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=vcenter.yaml
+receivers:
+  vcenter:
+    endpoint: ${VCENTER_ENDPOINT}
+    # Example: https://vcenter.example.com
+    username: ${VCENTER_USERNAME}
+    password: ${VCENTER_PASSWORD}
+    collection_interval: ${VCENTER_INTERVAL:-60s}
+    # Skip TLS verification (not recommended for production)
+    tls:
+      insecure_skip_verify: ${VCENTER_INSECURE:-false}
+    metrics:
+      # --- VM Metrics ---
+      vcenter.vm.cpu.usage:
+        enabled: true
+      vcenter.vm.cpu.utilization:
+        enabled: true
+      vcenter.vm.disk.latency.avg:
+        enabled: true
+      vcenter.vm.disk.latency.max:
+        enabled: true
+      vcenter.vm.disk.throughput:
+        enabled: true
+      vcenter.vm.disk.usage:
+        enabled: true
+      vcenter.vm.memory.ballooned:
+        enabled: true
+      vcenter.vm.memory.swapped:
+        enabled: true
+      vcenter.vm.memory.usage:
+        enabled: true
+      vcenter.vm.memory.utilization:
+        enabled: true
+      vcenter.vm.network.packet.count:
+        enabled: true
+      vcenter.vm.network.packet.drop.rate:
+        enabled: true
+      vcenter.vm.network.throughput:
+        enabled: true
+      vcenter.vm.network.usage:
+        enabled: true
+      # --- Host Metrics ---
+      vcenter.host.cpu.usage:
+        enabled: true
+      vcenter.host.cpu.utilization:
+        enabled: true
+      vcenter.host.disk.latency.avg:
+        enabled: true
+      vcenter.host.disk.latency.max:
+        enabled: true
+      vcenter.host.disk.throughput:
+        enabled: true
+      vcenter.host.memory.usage:
+        enabled: true
+      vcenter.host.memory.utilization:
+        enabled: true
+      vcenter.host.network.packet.count:
+        enabled: true
+      vcenter.host.network.packet.error.rate:
+        enabled: true
+      vcenter.host.network.throughput:
+        enabled: true
+      vcenter.host.network.usage:
+        enabled: true
+      # --- Datastore Metrics ---
+      vcenter.datastore.disk.usage:
+        enabled: true
+      vcenter.datastore.disk.utilization:
+        enabled: true
+      # --- Cluster Metrics ---
+      vcenter.cluster.cpu.effective:
+        enabled: true
+      vcenter.cluster.cpu.limit:
+        enabled: true
+      vcenter.cluster.host.count:
+        enabled: true
+      vcenter.cluster.memory.effective:
+        enabled: true
+      vcenter.cluster.memory.limit:
+        enabled: true
+      vcenter.cluster.vm.count:
+        enabled: true
+      # --- Resource Pool Metrics ---
+      vcenter.resource_pool.cpu.shares:
+        enabled: true
+      vcenter.resource_pool.cpu.usage:
+        enabled: true
+      vcenter.resource_pool.memory.shares:
+        enabled: true
+      vcenter.resource_pool.memory.usage:
+        enabled: true

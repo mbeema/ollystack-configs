@@ -1,0 +1,29 @@
+# AWS X-Ray Exporter
+# Sends trace data to AWS X-Ray for distributed tracing analysis.
+# Supports cross-account export via STS AssumeRole.
+
+exporters:
+  awsxray:
+    # AWS region where X-Ray API calls are directed
+    region: ${AWS_REGION}
+
+    # Optional IAM role ARN for cross-account access (leave empty to use instance profile)
+    role_arn: ${AWS_XRAY_ROLE_ARN:-""}
+
+    # Indexed attributes become X-Ray annotations, enabling filter expressions
+    indexed_attributes:
+      - otel.resource.service.name
+      - otel.resource.deployment.environment
+      - otel.resource.cloud.availability_zone
+
+    # Retry and queue settings for reliability
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

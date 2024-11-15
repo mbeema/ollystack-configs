@@ -1,0 +1,27 @@
+# Kafka Metrics Receiver
+# Collects broker, topic, and consumer group metrics from Apache Kafka clusters.
+# Unlike the Kafka receiver (which consumes messages), this scrapes Kafka's
+# internal metrics for monitoring cluster health.
+#
+# Required: Network access to Kafka broker(s).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=kafkametrics.yaml
+receivers:
+  kafkametrics:
+    brokers:
+      - ${KAFKA_BROKERS:-localhost:9092}
+    protocol_version: ${KAFKA_PROTOCOL_VERSION:-2.0.0}
+    scrapers:
+      - brokers
+      - topics
+      - consumers
+    collection_interval: ${KAFKA_METRICS_INTERVAL:-60s}
+    auth:
+      # SASL authentication (if required)
+      # sasl:
+      #   mechanism: ${KAFKA_SASL_MECHANISM:-PLAIN}
+      #   username: ${KAFKA_USERNAME}
+      #   password: ${KAFKA_PASSWORD}
+      tls:
+        insecure: ${KAFKA_TLS_INSECURE:-false}

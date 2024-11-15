@@ -1,0 +1,26 @@
+# Zipkin Exporter
+# Exports traces to a Zipkin backend via the Zipkin v2 API.
+# Compatible with Zipkin server, Zipkin-compatible backends, and services
+# that accept Zipkin span format.
+#
+# Supports: traces
+#
+# Required env vars:
+#   ZIPKIN_ENDPOINT - Zipkin collector URL (default: http://zipkin:9411)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=zipkin.yaml
+exporters:
+  zipkin:
+    endpoint: ${ZIPKIN_ENDPOINT:-http://zipkin:9411}/api/v2/spans
+    # Format: json (default) or proto
+    format: json
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

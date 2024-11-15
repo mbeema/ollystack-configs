@@ -1,0 +1,44 @@
+# Conntrack / Host Network Receiver (via Prometheus node_exporter scrape)
+# Scrapes Linux conntrack and TCP state metrics from node_exporter.
+# Connection tracking issues cause 60%+ of Kubernetes network problems —
+# conntrack table exhaustion leads to random packet drops.
+#
+# Covers: conntrack table utilization, TCP state distribution (ESTABLISHED,
+# TIME_WAIT, CLOSE_WAIT), socket counts, netfilter queue drops, and
+# network error counters.
+#
+# Required: Prometheus node_exporter with conntrack and netstat collectors.
+#   node_exporter --collector.conntrack --collector.netstat --collector.tcpstat
+#
+# Alert when: conntrack entries > 80% of conntrack_max
+#   nf_conntrack_count / nf_conntrack_max > 0.8
+#
+# Usage:
+#   otelcol --config=base.yaml --config=conntrack.yaml
+receivers:
+  prometheus/conntrack:
+    config:
+      scrape_configs:
+        - job_name: conntrack
+          scrape_interval: ${CONNTRACK_SCRAPE_INTERVAL:-15s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${NODE_EXPORTER_TARGETS:-["localhost:9100"]}
+              labels:
+                component: network
+          # Kubernetes: discover node_exporter DaemonSet
+          # kubernetes_sd_configs:
+          #   - role: endpoints
+          #     namespaces:
+          #       names: ["monitoring"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_service_name]
+          #     action: keep
+          #     regex: node-exporter
+          #   - source_labels: [__meta_kubernetes_pod_node_name]
+          #     target_label: node
+          metric_relabel_configs:
+            # Keep conntrack, TCP state, and network error metrics
+            - source_labels: [__name__]
+              action: keep
+              regex: "node_(nf_conntrack_entries|nf_conntrack_entries_limit|netstat_Tcp_CurrEstab|netstat_Tcp_ActiveOpens|netstat_Tcp_PassiveOpens|netstat_Tcp_RetransSegs|netstat_Tcp_InErrs|netstat_Tcp_OutRsts|netstat_TcpExt_TCPTimeouts|netstat_TcpExt_ListenOverflows|netstat_TcpExt_ListenDrops|netstat_TcpExt_TCPSynRetrans|sockstat_TCP_tw|sockstat_TCP_alloc|sockstat_TCP_inuse|sockstat_sockets_used|network_receive_errs_total|network_transmit_errs_total|network_receive_drop_total|network_transmit_drop_total)"

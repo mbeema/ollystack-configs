@@ -1,0 +1,43 @@
+# CoreDNS Receiver (via Prometheus scrape)
+# Scrapes metrics from CoreDNS /metrics endpoint on port 9153.
+# DNS is the #1 cause of intermittent Kubernetes networking issues.
+#
+# Covers: query rates, latency histograms, cache hit/miss, SERVFAIL/NXDOMAIN,
+# upstream health, panics, and plugin-level metrics.
+#
+# CoreDNS exposes Prometheus metrics by default in Kubernetes.
+# Verify: kubectl -n kube-system get pods -l k8s-app=kube-dns
+#
+# Usage:
+#   otelcol --config=base.yaml --config=coredns.yaml
+receivers:
+  prometheus/coredns:
+    config:
+      scrape_configs:
+        - job_name: coredns
+          scrape_interval: ${COREDNS_SCRAPE_INTERVAL:-15s}
+          scrape_timeout: 10s
+          metrics_path: /metrics
+          # Static targets (standalone or VM-based CoreDNS)
+          static_configs:
+            - targets: ${COREDNS_TARGETS:-["localhost:9153"]}
+              labels:
+                component: dns
+          # Kubernetes service discovery (uncomment for K8s environments)
+          # kubernetes_sd_configs:
+          #   - role: endpoints
+          #     namespaces:
+          #       names: ["kube-system"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_service_name]
+          #     action: keep
+          #     regex: kube-dns
+          #   - source_labels: [__meta_kubernetes_pod_name]
+          #     target_label: pod
+          #   - source_labels: [__meta_kubernetes_namespace]
+          #     target_label: namespace
+          metric_relabel_configs:
+            # Keep only essential CoreDNS metrics to control cardinality
+            - source_labels: [__name__]
+              action: keep
+              regex: "coredns_(dns_request_duration_seconds|dns_requests_total|dns_responses_total|cache_hits_total|cache_misses_total|cache_entries|forward_requests_total|forward_responses_total|forward_request_duration_seconds|forward_healthcheck_failures_total|panics_total|plugin_enabled)"

@@ -1,0 +1,59 @@
+# Azure Monitor Receiver — Front Door & CDN
+# Pulls metrics from Azure Front Door (Standard/Premium) and CDN profiles.
+# Covers requests, latency, origin health, WAF, and cache performance.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-frontdoor.yaml
+receivers:
+  azuremonitor/frontdoor:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          # -----------------------------------------------------------------
+          # Azure Front Door (Standard/Premium)
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Cdn/profiles
+            metrics:
+              # Requests
+              - name: RequestCount
+              - name: RequestSize
+              - name: ResponseSize
+              - name: TotalLatency
+              - name: OriginLatency
+              - name: OriginRequestCount
+
+              # Errors
+              - name: Percentage4XX
+              - name: Percentage5XX
+
+              # Origin Health
+              - name: OriginHealthPercentage
+
+              # Data Transfer
+              - name: ByteHitRatio
+
+              # WAF (Web Application Firewall)
+              - name: WebApplicationFirewallRequestCount
+
+          # -----------------------------------------------------------------
+          # Azure Front Door (Classic)
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Network/frontdoors
+            metrics:
+              - name: RequestCount
+              - name: RequestSize
+              - name: ResponseSize
+              - name: TotalLatency
+              - name: BackendRequestCount
+              - name: BackendRequestLatency
+              - name: BackendHealthPercentage
+              - name: WebApplicationFirewallRequestCount
+              - name: BillableResponseSize

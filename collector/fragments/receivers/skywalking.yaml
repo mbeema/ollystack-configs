@@ -1,0 +1,14 @@
+# Apache SkyWalking Receiver
+# Receives traces, metrics, and logs in Apache SkyWalking format.
+# Use this to accept data from SkyWalking-instrumented applications
+# during migration to OpenTelemetry.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=skywalking.yaml
+receivers:
+  skywalking:
+    protocols:
+      grpc:
+        endpoint: ${SKYWALKING_GRPC_ENDPOINT:-0.0.0.0:11800}
+      http:
+        endpoint: ${SKYWALKING_HTTP_ENDPOINT:-0.0.0.0:12800}

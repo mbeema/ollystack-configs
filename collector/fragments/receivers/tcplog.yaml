@@ -1,0 +1,13 @@
+# TCP Log Receiver
+# Receives log data over TCP connections. Useful for collecting logs from
+# applications or log forwarders that send over TCP (e.g., rsyslog, Logstash).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=tcplog.yaml
+receivers:
+  tcplog:
+    listen_address: ${TCPLOG_ENDPOINT:-0.0.0.0:54525}
+    # Add parse operations (optional)
+    # operators:
+    #   - type: regex_parser
+    #     regex: '^(?P<time>\S+) (?P<severity>\S+) (?P<message>.*)'

@@ -1,0 +1,67 @@
+# ArgoCD Receiver (via Prometheus scrape)
+# Scrapes metrics from ArgoCD, the GitOps continuous delivery tool for
+# Kubernetes. Monitors sync status, application health, reconciliation
+# latency, and Git operations — key inputs for DORA metrics.
+#
+# Covers: application sync status, health state, reconciliation duration,
+# Git request latency, controller queue depth, cluster cache size,
+# and API server request rates.
+#
+# ArgoCD exposes Prometheus metrics on the following ports:
+#   Application Controller: 8082 /metrics
+#   API Server:            8083 /metrics
+#   Repo Server:           8084 /metrics
+#
+# Usage:
+#   otelcol --config=base.yaml --config=argocd.yaml
+receivers:
+  prometheus/argocd:
+    config:
+      scrape_configs:
+        # ArgoCD Application Controller (sync and health metrics)
+        - job_name: argocd-controller
+          scrape_interval: ${ARGOCD_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${ARGOCD_CONTROLLER_TARGETS:-["localhost:8082"]}
+              labels:
+                component: argocd-controller
+          # Kubernetes discovery
+          # kubernetes_sd_configs:
+          #   - role: pod
+          #     namespaces:
+          #       names: ["argocd"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          #     action: keep
+          #     regex: argocd-application-controller
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "argocd_(app_info|app_sync_total|app_reconcile_count|app_reconcile_bucket|app_reconcile_sum|app_k8s_request_total|cluster_api_resources|cluster_api_objects|cluster_events_total|cluster_cache_age_seconds|git_request_total|git_request_duration_seconds_bucket|kubectl_exec_total|kubectl_exec_pending|workqueue_depth|workqueue_adds_total|workqueue_queue_duration_seconds_bucket)"
+
+        # ArgoCD API Server
+        - job_name: argocd-server
+          scrape_interval: ${ARGOCD_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${ARGOCD_SERVER_TARGETS:-["localhost:8083"]}
+              labels:
+                component: argocd-server
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "argocd_(grpc_server_handled_total|grpc_server_handling_seconds_bucket)"
+
+        # ArgoCD Repo Server (Git operations)
+        - job_name: argocd-repo-server
+          scrape_interval: ${ARGOCD_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${ARGOCD_REPO_TARGETS:-["localhost:8084"]}
+              labels:
+                component: argocd-repo
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "argocd_(git_request_total|git_request_duration_seconds_bucket|repo_pending_request_total)"

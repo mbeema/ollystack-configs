@@ -1,0 +1,62 @@
+# Security Event Enrichment Processor
+# Enriches log events with security context: OCSF category mapping,
+# MITRE ATT&CK tactic/technique tagging, and severity normalization.
+#
+# Adds structured attributes that enable SIEM correlation, threat hunting,
+# and compliance reporting across heterogeneous log sources.
+#
+# Supports: Falco alerts, syslog, Windows Event Log, audit logs,
+# firewall logs, and application security events.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=security-event-enrichment.yaml
+processors:
+  transform/security-enrichment:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # ── MITRE ATT&CK Tactic Tagging ──
+          # Brute force / credential stuffing (T1110)
+          - set(attributes["mitre.attack.technique"], "T1110") where IsMatch(body, "(?i)(failed login|authentication fail|invalid password|access denied|login attempt)")
+          - set(attributes["mitre.attack.tactic"], "TA0006") where attributes["mitre.attack.technique"] == "T1110"
+          - set(attributes["mitre.attack.name"], "Brute Force") where attributes["mitre.attack.technique"] == "T1110"
+
+          # Privilege escalation (T1548)
+          - set(attributes["mitre.attack.technique"], "T1548") where IsMatch(body, "(?i)(sudo|su root|privilege escalat|setuid|chmod \\+s|runas)")
+          - set(attributes["mitre.attack.tactic"], "TA0004") where attributes["mitre.attack.technique"] == "T1548"
+          - set(attributes["mitre.attack.name"], "Abuse Elevation Control") where attributes["mitre.attack.technique"] == "T1548"
+
+          # Suspicious process execution (T1059)
+          - set(attributes["mitre.attack.technique"], "T1059") where IsMatch(body, "(?i)(powershell|cmd\\.exe|/bin/sh|/bin/bash|python -c|curl.*\\|.*sh)")
+          - set(attributes["mitre.attack.tactic"], "TA0002") where attributes["mitre.attack.technique"] == "T1059"
+          - set(attributes["mitre.attack.name"], "Command and Scripting Interpreter") where attributes["mitre.attack.technique"] == "T1059"
+
+          # Lateral movement (T1021)
+          - set(attributes["mitre.attack.technique"], "T1021") where IsMatch(body, "(?i)(ssh from|rdp session|remote desktop|psexec|wmic /node)")
+          - set(attributes["mitre.attack.tactic"], "TA0008") where attributes["mitre.attack.technique"] == "T1021"
+          - set(attributes["mitre.attack.name"], "Remote Services") where attributes["mitre.attack.technique"] == "T1021"
+
+          # Data exfiltration indicators (T1048)
+          - set(attributes["mitre.attack.technique"], "T1048") where IsMatch(body, "(?i)(large upload|data transfer|exfiltrat|dns tunnel|unusual outbound)")
+          - set(attributes["mitre.attack.tactic"], "TA0010") where attributes["mitre.attack.technique"] == "T1048"
+          - set(attributes["mitre.attack.name"], "Exfiltration Over Alternative Protocol") where attributes["mitre.attack.technique"] == "T1048"
+
+          # ── OCSF Category Mapping ──
+          # Authentication events → OCSF 3002 (Authentication)
+          - set(attributes["ocsf.category_uid"], "3") where IsMatch(body, "(?i)(login|logon|authenticat|sign.in|sso|oauth|saml)")
+          - set(attributes["ocsf.class_uid"], "3002") where attributes["ocsf.category_uid"] == "3"
+
+          # Network activity → OCSF 4001 (Network Activity)
+          - set(attributes["ocsf.category_uid"], "4") where IsMatch(body, "(?i)(firewall|connection|packet|flow|tcp|udp|dns query)")
+          - set(attributes["ocsf.class_uid"], "4001") where attributes["ocsf.category_uid"] == "4"
+
+          # System activity → OCSF 1001 (File Activity)
+          - set(attributes["ocsf.category_uid"], "1") where IsMatch(body, "(?i)(file (creat|delet|modif|access)|chmod|chown|mkdir|rmdir)")
+          - set(attributes["ocsf.class_uid"], "1001") where attributes["ocsf.category_uid"] == "1"
+
+          # ── Security Severity Normalization ──
+          - set(attributes["security.severity"], "critical") where IsMatch(body, "(?i)(container escape|privilege escalation|rootkit|reverse shell|cryptomin)")
+          - set(attributes["security.severity"], "high") where IsMatch(body, "(?i)(brute force|sql injection|xss|unauthorized access|malware)") and attributes["security.severity"] == nil
+          - set(attributes["security.severity"], "medium") where IsMatch(body, "(?i)(failed login|permission denied|certificate expir|policy violation)") and attributes["security.severity"] == nil
+          - set(attributes["security.severity"], "low") where IsMatch(body, "(?i)(port scan|recon|information disclosure)") and attributes["security.severity"] == nil

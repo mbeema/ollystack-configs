@@ -1,0 +1,13 @@
+# Resource detection processor for GCP environments.
+# Automatically detects GCE, GKE, and Cloud Run metadata.
+processors:
+  resourcedetection/gcp:
+    detectors:
+      # GCP detector covers GCE instances, GKE clusters, and Cloud Run services.
+      # Detects: project ID, zone, region, instance ID, machine type,
+      # GKE cluster name, Cloud Run service/revision.
+      - gcp
+    # Do not override existing resource attributes
+    override: false
+    # Timeout for metadata server calls
+    timeout: 5s

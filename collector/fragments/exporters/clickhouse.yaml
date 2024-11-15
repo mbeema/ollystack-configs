@@ -1,0 +1,31 @@
+# ClickHouse Exporter
+# Exports traces, metrics, and logs to ClickHouse columnar database.
+# ClickHouse provides excellent query performance for observability analytics
+# at scale. Popular as a backend for Signoz, Uptrace, and custom solutions.
+#
+# Required: ClickHouse instance with appropriate databases/tables created.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=clickhouse.yaml
+exporters:
+  clickhouse:
+    endpoint: ${CLICKHOUSE_ENDPOINT:-tcp://localhost:9000}
+    database: ${CLICKHOUSE_DATABASE:-otel}
+    username: ${CLICKHOUSE_USERNAME:-default}
+    password: ${CLICKHOUSE_PASSWORD:-}
+    # TTL for data retention (0 = no expiry)
+    ttl: ${CLICKHOUSE_TTL:-0}
+    logs_table_name: ${CLICKHOUSE_LOGS_TABLE:-otel_logs}
+    traces_table_name: ${CLICKHOUSE_TRACES_TABLE:-otel_traces}
+    metrics_table_name: ${CLICKHOUSE_METRICS_TABLE:-otel_metrics}
+    # Create tables automatically if they don't exist
+    create_schema: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

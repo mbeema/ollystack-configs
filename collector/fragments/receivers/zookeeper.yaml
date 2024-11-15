@@ -1,0 +1,46 @@
+# ZooKeeper Receiver
+# Pulls metrics from Apache ZooKeeper via the mntr (four-letter word) command.
+# Covers latency, connections, znodes, watches, and leader/follower state.
+#
+# Required: ZooKeeper 3.4+ with mntr enabled in zoo.cfg
+#   (4lw.commands.whitelist=mntr or 4lw.commands.whitelist=*)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=zookeeper.yaml
+receivers:
+  zookeeper:
+    endpoint: ${ZOOKEEPER_ENDPOINT:-localhost:2181}
+    collection_interval: ${ZOOKEEPER_INTERVAL:-60s}
+    metrics:
+      zookeeper.connection.active:
+        enabled: true
+      zookeeper.data_tree.ephemeral_node.count:
+        enabled: true
+      zookeeper.data_tree.size:
+        enabled: true
+      zookeeper.file_descriptor.limit:
+        enabled: true
+      zookeeper.file_descriptor.open:
+        enabled: true
+      zookeeper.follower.count:
+        enabled: true
+      zookeeper.fsync.exceeded_threshold.count:
+        enabled: true
+      zookeeper.latency.avg:
+        enabled: true
+      zookeeper.latency.max:
+        enabled: true
+      zookeeper.latency.min:
+        enabled: true
+      zookeeper.packet.count:
+        enabled: true
+      zookeeper.request.active:
+        enabled: true
+      zookeeper.ruok:
+        enabled: true
+      zookeeper.sync.pending:
+        enabled: true
+      zookeeper.watch.count:
+        enabled: true
+      zookeeper.znode.count:
+        enabled: true

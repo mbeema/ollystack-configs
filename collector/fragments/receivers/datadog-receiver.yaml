@@ -1,0 +1,14 @@
+# Datadog Receiver
+# Receives traces and metrics in Datadog Agent format.
+# Use this to migrate from Datadog Agent to OpenTelemetry Collector
+# without changing application-side instrumentation.
+#
+# Accepts data on the same endpoints as the Datadog Agent (default port 8126 for traces).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=datadog-receiver.yaml
+receivers:
+  datadog:
+    endpoint: ${DATADOG_RECEIVER_ENDPOINT:-0.0.0.0:8126}
+    # Read timeout for incoming connections
+    read_timeout: ${DATADOG_READ_TIMEOUT:-60s}

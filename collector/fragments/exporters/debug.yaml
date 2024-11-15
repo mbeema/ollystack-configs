@@ -1,0 +1,13 @@
+# Debug Exporter
+# Outputs telemetry to stdout for development and troubleshooting.
+# NOT intended for production traffic — use only in dev/staging or at low sampling rates.
+
+exporters:
+  debug:
+    # "detailed" prints full span/metric/log content; use "basic" for summaries
+    verbosity: detailed
+
+    # Sampling controls to limit console output volume
+    # Log the first N items immediately, then every Mth item thereafter
+    sampling_initial: 5
+    sampling_thereafter: 200

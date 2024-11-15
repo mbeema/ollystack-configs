@@ -1,0 +1,10 @@
+# Memory limiter processor - prevents out-of-memory situations.
+# Should be the FIRST processor in every pipeline to protect the collector.
+processors:
+  memory_limiter:
+    # Hard limit on memory usage in MiB
+    limit_mib: ${MEMORY_LIMIT_MIB:-512}
+    # Maximum expected spike in memory usage in MiB
+    spike_limit_mib: ${MEMORY_SPIKE_MIB:-128}
+    # How often to check memory usage
+    check_interval: 1s

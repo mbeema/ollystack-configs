@@ -1,0 +1,56 @@
+# Service Mesh Metadata Injection Processor
+# Enriches telemetry with service mesh context from Istio, Linkerd,
+# Cilium, and Consul Connect. Adds mesh identity, proxy version,
+# upstream/downstream context, and mTLS status as structured attributes.
+#
+# Designed to complement k8sattributes — this processor adds the
+# service mesh layer metadata that k8sattributes does not extract.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=service-mesh-metadata.yaml
+processors:
+  transform/service-mesh:
+    error_mode: ignore
+    trace_statements:
+      - context: resource
+        statements:
+          # ── Istio / Envoy Detection ──
+          # If Istio sidecar injected, the proxy adds these headers/attributes
+          - set(attributes["mesh.type"], "istio") where attributes["istio.mesh_id"] != nil
+          - set(attributes["mesh.type"], "istio") where IsMatch(attributes["user_agent.original"], "(?i)envoy") and attributes["mesh.type"] == nil
+
+          # ── Linkerd Detection ──
+          - set(attributes["mesh.type"], "linkerd") where attributes["linkerd.io/proxy-version"] != nil
+          - set(attributes["mesh.type"], "linkerd") where IsMatch(attributes["user_agent.original"], "(?i)linkerd") and attributes["mesh.type"] == nil
+
+          # ── Cilium / Hubble Detection ──
+          - set(attributes["mesh.type"], "cilium") where attributes["cilium.identity"] != nil
+
+          # ── Consul Connect Detection ──
+          - set(attributes["mesh.type"], "consul") where attributes["consul.service.id"] != nil
+
+      - context: span
+        statements:
+          # ── Traffic Direction ──
+          # Mark inbound vs outbound based on span kind and proxy context
+          - set(attributes["mesh.traffic_direction"], "inbound") where kind == SPAN_KIND_SERVER
+          - set(attributes["mesh.traffic_direction"], "outbound") where kind == SPAN_KIND_CLIENT
+
+          # ── mTLS Status ──
+          # Tag whether the connection used mutual TLS
+          - set(attributes["mesh.mtls"], "true") where attributes["upstream_peer.principal"] != nil
+          - set(attributes["mesh.mtls"], "true") where IsMatch(attributes["http.url"], "(?i)^https://")
+          - set(attributes["mesh.mtls"], "true") where attributes["tls.established"] == true
+
+          # ── Upstream/Downstream Labeling ──
+          # Extract Envoy cluster names for service dependency mapping
+          - set(attributes["mesh.upstream_cluster"], attributes["upstream_cluster.name"]) where attributes["upstream_cluster.name"] != nil
+          - set(attributes["mesh.downstream_cluster"], attributes["downstream_cluster.name"]) where attributes["downstream_cluster.name"] != nil
+
+    log_statements:
+      - context: resource
+        statements:
+          # Detect mesh type from log source
+          - set(attributes["mesh.type"], "istio") where IsMatch(attributes["k8s.container.name"], "istio-proxy")
+          - set(attributes["mesh.type"], "linkerd") where IsMatch(attributes["k8s.container.name"], "linkerd-proxy")
+          - set(attributes["mesh.type"], "cilium") where IsMatch(attributes["k8s.container.name"], "cilium-agent")

@@ -1,0 +1,18 @@
+# Health Check Extension
+# Exposes a health endpoint for liveness/readiness probes (e.g., Kubernetes).
+# Endpoint is configurable via OTEL_HEALTH_CHECK_PORT (default: 13133).
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:${OTEL_HEALTH_CHECK_PORT:-13133}"
+    path: /health
+    # Optional: respond with detailed component-level health status
+    check_collector_pipeline:
+      enabled: true
+      # Interval between health evaluations
+      interval: "5m"
+    # Optional: expected response for readiness on /health
+    tls:
+      # Uncomment to enable TLS on the health endpoint
+      # cert_file: ${OTEL_HEALTH_CHECK_TLS_CERT:-}
+      # key_file: ${OTEL_HEALTH_CHECK_TLS_KEY:-}

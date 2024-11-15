@@ -1,0 +1,26 @@
+# Sumo Logic Exporter
+# Exports traces, metrics, and logs to Sumo Logic.
+#
+# Required: Sumo Logic installation token or HTTP source URL.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=sumologic.yaml
+exporters:
+  sumologic:
+    # Sumo Logic HTTP Source URL (collector endpoint)
+    endpoint: ${SUMOLOGIC_ENDPOINT}
+    # Compression (gzip recommended)
+    compress_encoding: gzip
+    # Metrics format: prometheus, carbon2, or graphite
+    metric_format: prometheus
+    # Log format: json, text, or otlp
+    log_format: otlp
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

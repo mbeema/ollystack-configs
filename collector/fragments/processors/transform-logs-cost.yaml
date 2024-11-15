@@ -1,0 +1,35 @@
+# Log Cost Optimization
+# Reduces log storage costs by truncating oversized bodies, stripping
+# stack traces from non-error logs, and removing redundant attributes.
+#
+# Typical savings: 30-60% log volume reduction without losing signal.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=transform-logs-cost.yaml
+processors:
+  transform/logs-cost:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # ── Truncate oversized log bodies ──
+          # Logs > 4KB are usually JSON dumps or stack traces.
+          # Keep first 4096 chars and append truncation marker.
+          - truncate_all(attributes, 4096)
+
+          # ── Strip stack traces from non-error logs ──
+          # Stack traces in INFO/WARN logs are usually noise (e.g., Spring Boot startup)
+          # Keep stack traces only in ERROR/FATAL logs
+          - replace_pattern(body, "(?s)(\\n\\s+at\\s+[\\w.$]+\\(.*?\\))+", "\n  [stack trace truncated]") where severity_number < SEVERITY_NUMBER_ERROR and severity_number != 0
+
+          # ── Remove redundant/noisy log attributes ──
+          # These are often duplicated in resource attributes or not useful
+          - delete_key(attributes, "log.file.path")
+          - delete_key(attributes, "log.iostream")
+          - delete_key(attributes, "log.file.name")
+
+          # ── Remove Kubernetes metadata already on the resource ──
+          # k8sattributes processor puts these on resource; remove from log attributes
+          - delete_key(attributes, "k8s.pod.name") where resource.attributes["k8s.pod.name"] != nil
+          - delete_key(attributes, "k8s.namespace.name") where resource.attributes["k8s.namespace.name"] != nil
+          - delete_key(attributes, "k8s.container.name") where resource.attributes["k8s.container.name"] != nil

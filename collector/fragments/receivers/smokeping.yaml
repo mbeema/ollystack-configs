@@ -1,0 +1,30 @@
+# Smokeping Prober Receiver (via Prometheus scrape)
+# Scrapes metrics from smokeping_prober, a Prometheus-style continuous
+# latency and packet loss measurement tool inspired by SmokePing.
+#
+# Sends ICMP/UDP pings at regular intervals and produces latency
+# distributions, packet loss percentages, and jitter measurements.
+#
+# Ideal for: WAN link quality, inter-datacenter latency baselines,
+# ISP SLA verification, and network brownout detection.
+#
+# Required: smokeping_prober (github.com/SuperQ/smokeping_prober)
+#   smokeping_prober --config.file=targets.yml
+#
+# Usage:
+#   otelcol --config=base.yaml --config=smokeping.yaml
+receivers:
+  prometheus/smokeping:
+    config:
+      scrape_configs:
+        - job_name: smokeping
+          scrape_interval: ${SMOKEPING_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${SMOKEPING_TARGETS:-["localhost:9374"]}
+              labels:
+                component: network-probe
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "smokeping_(requests_total|response_ttl|response_duration_seconds_bucket|response_duration_seconds_sum|response_duration_seconds_count)"

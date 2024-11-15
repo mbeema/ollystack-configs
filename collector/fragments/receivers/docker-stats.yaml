@@ -1,0 +1,39 @@
+# Docker Stats Receiver
+# Collects container resource usage metrics from the Docker daemon.
+# Requires access to the Docker socket.
+receivers:
+  docker_stats:
+    # Docker daemon endpoint (Unix socket or TCP)
+    endpoint: ${DOCKER_ENDPOINT:-unix:///var/run/docker.sock}
+    # How often to collect container stats
+    collection_interval: ${DOCKER_STATS_INTERVAL:-30s}
+    # Timeout for Docker API calls
+    timeout: ${DOCKER_STATS_TIMEOUT:-10s}
+    # Docker API version (auto-negotiated if empty)
+    api_version: ${DOCKER_API_VERSION:-1.24}
+    # Filter containers by name (regex); empty = all containers
+    # container_labels_to_metric_labels:
+    #   com.docker.compose.service: service_name
+    #   com.docker.compose.project: project_name
+    # Metrics to collect from each container
+    metrics:
+      container.cpu.usage.total:
+        enabled: true
+      container.cpu.usage.percpu:
+        enabled: true
+      container.cpu.percent:
+        enabled: true
+      container.memory.usage.total:
+        enabled: true
+      container.memory.usage.limit:
+        enabled: true
+      container.memory.percent:
+        enabled: true
+      container.network.io.usage.rx_bytes:
+        enabled: true
+      container.network.io.usage.tx_bytes:
+        enabled: true
+      container.blockio.io_service_bytes_recursive:
+        enabled: true
+    # Excluded container image names (e.g., pause containers in K8s)
+    excluded_images: ${DOCKER_EXCLUDED_IMAGES:-[]}

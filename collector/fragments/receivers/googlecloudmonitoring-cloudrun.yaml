@@ -1,0 +1,47 @@
+# Google Cloud Monitoring Receiver — Cloud Run
+# Pulls Cloud Run service and revision metrics from Google Cloud Monitoring.
+# Covers request counts, latency, container CPU/memory, instance counts, and billable time.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-cloudrun.yaml
+receivers:
+  googlecloudmonitoring/cloudrun:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Request Metrics ---
+      - metric_name: run.googleapis.com/request_count
+      - metric_name: run.googleapis.com/request_latencies
+
+      # --- Container CPU ---
+      - metric_name: run.googleapis.com/container/cpu/utilizations
+      - metric_name: run.googleapis.com/container/cpu/allocation_time
+      - metric_name: run.googleapis.com/container/startup_latencies
+
+      # --- Container Memory ---
+      - metric_name: run.googleapis.com/container/memory/utilizations
+      - metric_name: run.googleapis.com/container/memory/allocation_time
+
+      # --- Instance Count ---
+      - metric_name: run.googleapis.com/container/instance_count
+      - metric_name: run.googleapis.com/container/max_request_concurrencies
+
+      # --- Network ---
+      - metric_name: run.googleapis.com/container/network/received_bytes_count
+      - metric_name: run.googleapis.com/container/network/sent_bytes_count
+
+      # --- Billable Time ---
+      - metric_name: run.googleapis.com/container/billable_instance_time
+
+      # --- Container Logs ---
+      - metric_name: run.googleapis.com/container/log_entry_count
+
+      # --- Jobs (Cloud Run Jobs) ---
+      - metric_name: run.googleapis.com/job/running_executions
+      - metric_name: run.googleapis.com/job/running_task_attempts
+      - metric_name: run.googleapis.com/job/completed_task_attempt_count

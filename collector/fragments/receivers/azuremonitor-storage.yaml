@@ -1,0 +1,93 @@
+# Azure Monitor Receiver — Storage Accounts (Blob, File, Queue, Table)
+# Pulls metrics from Azure Storage accounts via Azure Monitor API.
+# Covers transactions, availability, latency, capacity, and per-service breakdowns.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-storage.yaml
+receivers:
+  azuremonitor/storage:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          # -----------------------------------------------------------------
+          # Storage Account (aggregate)
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Storage/storageAccounts
+            metrics:
+              - name: UsedCapacity
+              - name: Transactions
+              - name: Ingress
+              - name: Egress
+              - name: SuccessServerLatency
+              - name: SuccessE2ELatency
+              - name: Availability
+
+          # -----------------------------------------------------------------
+          # Blob Storage
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Storage/storageAccounts/blobServices
+            metrics:
+              - name: BlobCapacity
+              - name: BlobCount
+              - name: ContainerCount
+              - name: IndexCapacity
+              - name: Transactions
+              - name: Ingress
+              - name: Egress
+              - name: SuccessServerLatency
+              - name: SuccessE2ELatency
+              - name: Availability
+
+          # -----------------------------------------------------------------
+          # File Storage
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Storage/storageAccounts/fileServices
+            metrics:
+              - name: FileCapacity
+              - name: FileCount
+              - name: FileShareCount
+              - name: FileShareCapacityQuota
+              - name: Transactions
+              - name: Ingress
+              - name: Egress
+              - name: SuccessServerLatency
+              - name: SuccessE2ELatency
+              - name: Availability
+
+          # -----------------------------------------------------------------
+          # Queue Storage
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Storage/storageAccounts/queueServices
+            metrics:
+              - name: QueueCapacity
+              - name: QueueCount
+              - name: QueueMessageCount
+              - name: Transactions
+              - name: Ingress
+              - name: Egress
+              - name: SuccessServerLatency
+              - name: SuccessE2ELatency
+              - name: Availability
+
+          # -----------------------------------------------------------------
+          # Table Storage
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Storage/storageAccounts/tableServices
+            metrics:
+              - name: TableCapacity
+              - name: TableCount
+              - name: TableEntityCount
+              - name: Transactions
+              - name: Ingress
+              - name: Egress
+              - name: SuccessServerLatency
+              - name: SuccessE2ELatency
+              - name: Availability

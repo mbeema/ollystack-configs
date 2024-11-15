@@ -1,0 +1,25 @@
+# SignalFx Exporter
+# Exports metrics and events to Splunk Observability Cloud (formerly SignalFx).
+# Use the OTLP exporter for traces to Splunk Observability Cloud instead.
+#
+# Required: SignalFx/Splunk Observability access token.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=signalfx.yaml
+exporters:
+  signalfx:
+    access_token: ${SIGNALFX_TOKEN}
+    realm: ${SIGNALFX_REALM:-us1}
+    # API URL override (usually auto-derived from realm)
+    # api_url: https://api.${SIGNALFX_REALM}.signalfx.com
+    # Ingest URL override
+    # ingest_url: https://ingest.${SIGNALFX_REALM}.signalfx.com
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

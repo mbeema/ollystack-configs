@@ -1,0 +1,36 @@
+# Attributes processor - manipulate span, metric, and log attributes.
+# Supports insert, update, upsert, delete, hash, and extract actions.
+processors:
+  attributes/example:
+    actions:
+      # INSERT - add attribute only if it does not already exist
+      - key: environment
+        value: ${DEPLOYMENT_ENVIRONMENT:-production}
+        action: insert
+
+      # UPDATE - modify attribute only if it already exists
+      - key: http.url
+        action: update
+        from_attribute: http.target
+
+      # UPSERT - insert or update regardless of existence
+      - key: collector.version
+        value: "1.0.0"
+        action: upsert
+
+      # DELETE - remove sensitive or unwanted attributes
+      - key: http.request.header.authorization
+        action: delete
+      - key: user.password
+        action: delete
+
+      # HASH - hash sensitive attribute values (e.g., PII)
+      - key: user.email
+        action: hash
+      - key: client.ip
+        action: hash
+
+      # EXTRACT - extract values from an attribute using regex
+      - key: http.url
+        pattern: ^https?://(?P<http.host>[^/]+)(?P<http.path>/.*)$
+        action: extract

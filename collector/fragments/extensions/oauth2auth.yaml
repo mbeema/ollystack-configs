@@ -1,0 +1,29 @@
+# OAuth2 Client Credentials Authentication Extension
+# Provides OAuth2 token-based authentication for exporters connecting
+# to SaaS backends and enterprise APIs that require OAuth2 flows.
+#
+# Supports client_credentials grant type — automatically refreshes
+# access tokens before expiry.
+#
+# Common use cases: Chronosphere, Grafana Cloud, enterprise SIEM
+# platforms, and custom API endpoints requiring OAuth2.
+#
+# Security: Always inject client secrets via environment variables.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=oauth2auth.yaml
+extensions:
+  oauth2client:
+    client_id: ${OTEL_OAUTH2_CLIENT_ID}
+    client_secret: ${OTEL_OAUTH2_CLIENT_SECRET}
+    token_url: ${OTEL_OAUTH2_TOKEN_URL}
+    # Scopes requested from the authorization server
+    scopes: ${OTEL_OAUTH2_SCOPES:-[]}
+    # Optional: audience for the token
+    # audience: ${OTEL_OAUTH2_AUDIENCE}
+    # TLS settings for the token endpoint
+    tls:
+      insecure: ${OTEL_OAUTH2_TLS_INSECURE:-false}
+      # ca_file: ${OTEL_OAUTH2_CA_FILE}
+    # Timeout for token requests
+    timeout: ${OTEL_OAUTH2_TIMEOUT:-10s}

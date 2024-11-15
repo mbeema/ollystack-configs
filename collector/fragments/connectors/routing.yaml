@@ -1,0 +1,39 @@
+# Routing Connector
+# Routes telemetry across pipelines based on resource attributes,
+# record attributes, or context. Unlike the routing processor (which
+# routes to different exporters within a pipeline), the routing connector
+# forwards data to entirely different pipelines with their own
+# processors and exporters.
+#
+# Use cases: route security logs to SIEM pipeline, send high-value
+# traces to long-retention storage, split by tenant/environment.
+
+connectors:
+  routing:
+    # Default pipelines when no route matches
+    default_pipelines:
+      traces: [traces/default]
+      metrics: [metrics/default]
+      logs: [logs/default]
+
+    # Match order: first matching route wins
+    table:
+      # Route error traces to a dedicated pipeline with full retention
+      - statement: route() where attributes["error"] == true
+        pipelines: [traces/errors]
+
+      # Route security logs to SIEM pipeline
+      - statement: route() where attributes["security.severity"] != nil
+        pipelines: [logs/security]
+
+      # Route database spans to DB-specific pipeline
+      - statement: route() where attributes["db.system"] != nil
+        pipelines: [traces/database]
+
+      # Route by environment
+      # - statement: route() where resource.attributes["deployment.environment"] == "production"
+      #   pipelines: [traces/production, metrics/production, logs/production]
+
+      # Route by tenant (multi-tenant setups)
+      # - statement: route() where resource.attributes["tenant.id"] == "acme"
+      #   pipelines: [traces/tenant-acme]

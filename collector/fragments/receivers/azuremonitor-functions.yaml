@@ -1,0 +1,52 @@
+# Azure Monitor Receiver — Azure Functions
+# Pulls metrics from Azure Functions via Azure Monitor API.
+# Covers execution counts, duration, errors, and Function App health.
+#
+# Note: Azure Functions metrics share the Microsoft.Web/sites resource type
+# with App Service, but provide function-specific metrics.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-functions.yaml
+receivers:
+  azuremonitor/functions:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.Web/sites
+            metrics:
+              # --- Function Execution ---
+              - name: FunctionExecutionCount
+              - name: FunctionExecutionUnits
+
+              # --- Requests ---
+              - name: Requests
+              - name: HttpResponseTime
+              - name: Http5xx
+              - name: Http4xx
+              - name: Http2xx
+
+              # --- Compute ---
+              - name: CpuTime
+              - name: MemoryWorkingSet
+              - name: AverageMemoryWorkingSet
+
+              # --- Connections ---
+              - name: AppConnections
+              - name: Threads
+
+              # --- IO ---
+              - name: BytesReceived
+              - name: BytesSent
+              - name: IoReadBytesPerSecond
+              - name: IoWriteBytesPerSecond
+
+              # --- Health ---
+              - name: HealthCheckStatus

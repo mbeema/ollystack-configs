@@ -1,0 +1,17 @@
+# GitLab Receiver
+# Receives webhook events from GitLab and converts them to OTel traces/logs.
+# Covers push events, merge requests, pipelines, deployments, and issues.
+#
+# Setup: Configure a GitLab webhook in your project or group settings.
+# Settings > Webhooks > Add webhook > URL
+#
+# Usage:
+#   otelcol --config=base.yaml --config=gitlab.yaml
+receivers:
+  gitlab:
+    # Endpoint to listen for GitLab webhooks
+    endpoint: ${GITLAB_WEBHOOK_ENDPOINT:-0.0.0.0:19419}
+    # Path for the webhook handler
+    path: ${GITLAB_WEBHOOK_PATH:-/events}
+    # GitLab webhook secret token for payload validation
+    secret: ${GITLAB_WEBHOOK_SECRET}

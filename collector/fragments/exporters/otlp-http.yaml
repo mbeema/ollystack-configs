@@ -1,0 +1,35 @@
+# OTLP HTTP Exporter
+# Exports telemetry over HTTP/1.1 or HTTP/2 using the OpenTelemetry Protocol.
+# Suitable for backends behind HTTP load balancers or API gateways.
+
+exporters:
+  otlp/http:
+    # Target endpoint (must include /v1/traces, /v1/metrics, /v1/logs paths)
+    endpoint: ${OTLP_HTTP_ENDPOINT}
+    compression: gzip
+    timeout: 30s
+
+    # Custom headers — useful for API keys or tenant identification
+    headers:
+      Authorization: ${OTLP_HTTP_AUTH_HEADER:-""}
+      X-Custom-Header: ${OTLP_HTTP_CUSTOM_HEADER:-""}
+
+    # TLS settings for HTTPS endpoints
+    tls:
+      cert_file: ${OTLP_HTTP_TLS_CERT_FILE}
+      key_file: ${OTLP_HTTP_TLS_KEY_FILE}
+      ca_file: ${OTLP_HTTP_TLS_CA_FILE}
+      insecure: ${OTLP_HTTP_TLS_INSECURE:-false}
+
+    # Retry policy — exponential backoff on transient failures
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    # Sending queue — absorbs back-pressure spikes
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

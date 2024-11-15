@@ -1,0 +1,21 @@
+# Kubernetes Objects Receiver
+# Watches Kubernetes API server for object changes and collects them as logs.
+# Useful for auditing, compliance, and tracking resource changes (deployments,
+# pods, configmaps, etc.) as structured log events.
+#
+# Required: RBAC permissions to list/watch the configured object types.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=k8sobjects.yaml
+receivers:
+  k8sobjects:
+    auth_type: ${K8S_AUTH_TYPE:-serviceAccount}
+    objects:
+      - name: events
+        mode: watch
+      - name: pods
+        mode: pull
+        interval: ${K8S_OBJECTS_INTERVAL:-60s}
+      - name: deployments
+        mode: pull
+        interval: ${K8S_OBJECTS_INTERVAL:-60s}

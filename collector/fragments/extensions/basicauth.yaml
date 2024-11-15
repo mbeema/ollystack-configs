@@ -1,0 +1,22 @@
+# Basic Authentication Extension
+# Provides HTTP Basic Auth for exporters connecting to backends
+# that require username/password authentication.
+#
+# Common use cases: Elasticsearch, Grafana Cloud, self-hosted
+# Prometheus remote write, and legacy HTTP endpoints.
+#
+# Security: Always inject credentials via environment variables.
+# Never hardcode usernames or passwords in configuration files.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=basicauth.yaml
+extensions:
+  basicauth:
+    client_auth:
+      username: ${OTEL_BASIC_AUTH_USERNAME}
+      password: ${OTEL_BASIC_AUTH_PASSWORD}
+    # For receiver-side (incoming) authentication, use htpasswd:
+    # htpasswd:
+    #   file: ${OTEL_HTPASSWD_FILE:-/etc/otel/.htpasswd}
+    #   # Or inline (not recommended for production):
+    #   # inline: "${OTEL_HTPASSWD_INLINE}"

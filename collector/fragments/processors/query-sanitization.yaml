@@ -1,0 +1,33 @@
+# Database Query Sanitization Processor
+# Normalizes SQL/NoSQL query strings in db.statement to prevent
+# high-cardinality explosion from parameterized values.
+#
+# Replaces literal values (strings, numbers, IN-lists) with placeholders,
+# preserving query structure for grouping and analysis.
+#
+# Without sanitization, "SELECT * FROM users WHERE id=123" and
+# "SELECT * FROM users WHERE id=456" are treated as different queries,
+# creating unbounded metric cardinality.
+#
+# Typical savings: 10-100x reduction in unique db.statement values.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=query-sanitization.yaml
+processors:
+  transform/query-sanitization:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        conditions:
+          - attributes["db.system"] != nil
+        statements:
+          # Replace single-quoted string literals with placeholder
+          - replace_pattern(attributes["db.statement"], "'[^']*'", "'?'")
+          # Replace numeric literals (integers and decimals)
+          - replace_pattern(attributes["db.statement"], "\\b\\d+\\.?\\d*\\b", "?")
+          # Collapse IN-lists: IN (?, ?, ?, ?) → IN (?)
+          - replace_pattern(attributes["db.statement"], "IN\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\)", "IN (?)")
+          # Collapse VALUES lists for INSERT: VALUES (?, ?, ?), (?, ?, ?) → VALUES (?)
+          - replace_pattern(attributes["db.statement"], "VALUES\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\)(?:\\s*,\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))*", "VALUES (?)")
+          # Truncate overly long statements (stored procedures, ORMs)
+          - truncate_all(attributes, 4096) where attributes["db.statement"] != nil

@@ -1,0 +1,14 @@
+# Webhook Event Receiver
+# Receives arbitrary webhook events over HTTP/HTTPS and converts them to OTel logs.
+# Useful for integrating CI/CD pipelines, alerting systems, or any HTTP callback.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=webhookevent.yaml
+receivers:
+  webhookevent:
+    endpoint: ${WEBHOOK_ENDPOINT:-0.0.0.0:8088}
+    path: ${WEBHOOK_PATH:-/events}
+    # Health check path (optional)
+    health_path: ${WEBHOOK_HEALTH_PATH:-/health}
+    # Required secret for HMAC validation (optional but recommended)
+    # secret: ${WEBHOOK_SECRET}

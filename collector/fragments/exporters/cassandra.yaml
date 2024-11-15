@@ -1,0 +1,27 @@
+# Cassandra Exporter
+# Exports traces to Apache Cassandra. Uses the Jaeger Cassandra schema
+# for trace storage, making it compatible with Jaeger UI for visualization.
+#
+# Required: Cassandra cluster with Jaeger schema applied.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=cassandra.yaml
+exporters:
+  cassandra:
+    dsn: ${CASSANDRA_DSN:-localhost}
+    port: ${CASSANDRA_PORT:-9042}
+    keyspace: ${CASSANDRA_KEYSPACE:-jaeger_v1_dc1}
+    trace_table: ${CASSANDRA_TRACE_TABLE:-traces}
+    # Authentication (if enabled)
+    auth:
+      username: ${CASSANDRA_USERNAME:-}
+      password: ${CASSANDRA_PASSWORD:-}
+    # Replication settings
+    replication:
+      class: ${CASSANDRA_REPLICATION_CLASS:-SimpleStrategy}
+      replication_factor: ${CASSANDRA_REPLICATION_FACTOR:-1}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s

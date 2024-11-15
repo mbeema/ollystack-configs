@@ -1,0 +1,21 @@
+# Group by Attributes Processor
+# Re-associates telemetry with resources based on specified attributes.
+# Moves selected attributes from the data point level to the resource level,
+# grouping data points that share the same attribute values under one resource.
+#
+# Use cases:
+# - Reduce cardinality by consolidating metrics under common resources
+# - Fix missing resource attributes by promoting data-level attributes
+# - Group spans/logs by service.name when source doesn't set it at resource level
+#
+# Usage:
+#   otelcol --config=base.yaml --config=groupbyattrs.yaml
+processors:
+  groupbyattrs:
+    keys:
+      - ${GROUPBY_KEY_1:-service.name}
+      - ${GROUPBY_KEY_2:-host.name}
+      # Add more keys as needed
+      # - k8s.namespace.name
+      # - k8s.deployment.name
+      # - cloud.region

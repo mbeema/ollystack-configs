@@ -1,0 +1,42 @@
+# Kubernetes Cluster Receiver
+# Collects cluster-level metrics from the Kubernetes API server.
+# Runs as a single-replica Deployment (not DaemonSet) to avoid duplicate data.
+receivers:
+  k8s_cluster:
+    # How often to poll the Kubernetes API for cluster state
+    collection_interval: ${K8S_CLUSTER_INTERVAL:-30s}
+    # Authentication type for the Kubernetes API
+    auth_type: ${K8S_CLUSTER_AUTH_TYPE:-serviceAccount}
+    # Node conditions to report as metrics (e.g., Ready, MemoryPressure)
+    node_conditions_to_report:
+      - Ready
+      - MemoryPressure
+      - DiskPressure
+      - PIDPressure
+      - NetworkUnavailable
+    # Allocatable resource types to report (capacity vs requests vs limits)
+    allocatable_types_to_report:
+      - cpu
+      - memory
+      - storage
+      - ephemeral-storage
+    # Resource and metadata attributes for correlation
+    metadata_collection_interval: ${K8S_CLUSTER_METADATA_INTERVAL:-5m}
+    # Distribution of metrics across resource types
+    resource_attributes:
+      k8s.namespace.name:
+        enabled: true
+      k8s.node.name:
+        enabled: true
+      k8s.deployment.name:
+        enabled: true
+      k8s.statefulset.name:
+        enabled: true
+      k8s.daemonset.name:
+        enabled: true
+      k8s.job.name:
+        enabled: true
+      k8s.cronjob.name:
+        enabled: true
+      k8s.replicaset.name:
+        enabled: true

@@ -1,0 +1,25 @@
+# Solace Receiver
+# Receives traces from Solace PubSub+ event brokers via AMQP.
+# Converts Solace broker telemetry into OpenTelemetry spans.
+#
+# Required: Solace PubSub+ broker with telemetry enabled.
+# The broker sends distributed tracing data over AMQP to this receiver.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=solace.yaml
+receivers:
+  solace:
+    # AMQP broker endpoint
+    broker:
+      - ${SOLACE_BROKER:-amqp://localhost:5672}
+    # Queue to consume trace messages from
+    queue: ${SOLACE_QUEUE:-queue://#telemetry-trace}
+    # Maximum number of unacknowledged messages
+    max_unacknowledged: ${SOLACE_MAX_UNACK:-1000}
+    # Authentication
+    auth:
+      sasl_plain:
+        username: ${SOLACE_USERNAME}
+        password: ${SOLACE_PASSWORD}
+    tls:
+      insecure_skip_verify: ${SOLACE_INSECURE:-false}

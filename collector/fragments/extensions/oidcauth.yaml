@@ -1,0 +1,25 @@
+# OpenID Connect (OIDC) Authentication Extension
+# Validates incoming OIDC tokens on receiver endpoints.
+# Used to authenticate telemetry producers (agents, SDKs) sending
+# data to the collector via OTLP or other receiver protocols.
+#
+# Common use cases: multi-tenant collector deployments, zero-trust
+# environments where each producer must authenticate with an IdP
+# (Okta, Azure AD/Entra ID, Keycloak, Auth0).
+#
+# This extension validates JWT tokens against the OIDC provider's
+# JWKS endpoint — it does NOT perform the OAuth2 grant flow
+# (use oauth2auth for outgoing authentication).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=oidcauth.yaml
+extensions:
+  oidc:
+    # OIDC issuer URL (must expose .well-known/openid-configuration)
+    issuer_url: ${OTEL_OIDC_ISSUER_URL}
+    # Expected audience claim in the JWT
+    audience: ${OTEL_OIDC_AUDIENCE}
+    # Optional: specific username claim to extract from the JWT
+    # username_claim: ${OTEL_OIDC_USERNAME_CLAIM:-email}
+    # Optional: group claim for RBAC
+    # groups_claim: ${OTEL_OIDC_GROUPS_CLAIM:-groups}

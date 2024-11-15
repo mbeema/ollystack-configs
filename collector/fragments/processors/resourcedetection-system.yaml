@@ -1,0 +1,21 @@
+# Resource detection processor for system-level attributes.
+# Detects hostname and OS type from the host system.
+processors:
+  resourcedetection/system:
+    detectors:
+      # System detector provides host.name, host.id, os.type
+      - system
+    # Do not override existing resource attributes
+    override: false
+    system:
+      # Attributes to detect from the host
+      hostname_sources:
+        - os
+        - dns
+      resource_attributes:
+        host.name:
+          enabled: true
+        host.id:
+          enabled: true
+        os.type:
+          enabled: true

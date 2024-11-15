@@ -1,0 +1,85 @@
+# AWS CloudWatch Receiver — Core (EC2, RDS basic, ALB basic)
+# Pulls metrics from AWS CloudWatch using the GetMetricData API.
+# Requires IAM permissions: cloudwatch:GetMetricData, cloudwatch:ListMetrics.
+#
+# This is the base CloudWatch receiver with common EC2/RDS/ALB metrics.
+# For comprehensive per-service coverage, compose with the dedicated fragments:
+#
+#   awscloudwatch-dynamodb.yaml      — DynamoDB table & GSI metrics
+#   awscloudwatch-rds-aurora.yaml    — RDS & Aurora enhanced (IOPS, replication, Aurora cluster)
+#   awscloudwatch-apigateway.yaml    — API Gateway REST/HTTP/WebSocket
+#   awscloudwatch-s3.yaml            — S3 storage & request metrics
+#   awscloudwatch-elasticache.yaml   — ElastiCache Redis & Memcached
+#   awscloudwatch-msk.yaml           — MSK (Managed Kafka) broker & consumer lag
+#   awscloudwatch-sqs.yaml           — SQS queue depth, age, throughput
+#   awscloudwatch-sns.yaml           — SNS publish & delivery metrics
+#   awscloudwatch-kinesis.yaml       — Kinesis Data Streams & Firehose
+#   awscloudwatch-stepfunctions.yaml — Step Functions execution metrics
+#   awscloudwatch-eventbridge.yaml   — EventBridge rules & invocations
+#   awscloudwatch-elb.yaml           — ALB & NLB full metrics
+#   awscloudwatch-cloudfront.yaml    — CloudFront edge metrics
+#   awscloudwatch-lambda.yaml        — Lambda invocations, duration, concurrency
+#
+# Example (compose multiple fragments):
+#   otelcol --config=base.yaml \
+#           --config=awscloudwatch.yaml \
+#           --config=awscloudwatch-dynamodb.yaml \
+#           --config=awscloudwatch-rds-aurora.yaml \
+#           --config=awscloudwatch-sqs.yaml
+
+receivers:
+  awscloudwatch:
+    # AWS region to pull CloudWatch metrics from
+    region: ${AWS_REGION:-us-east-1}
+    # How often to poll CloudWatch for new metric data
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    # IMDSv2 endpoint for credential resolution (optional; uses default chain)
+    # profile: ${AWS_PROFILE}
+    # Metric definitions organized by CloudWatch namespace
+    metrics:
+      # EC2 instance metrics
+      named:
+        - namespace: AWS/EC2
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          # Specific metrics to retrieve from this namespace
+          metrics:
+            - metric_name: CPUUtilization
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: NetworkIn
+              statistics:
+                - Sum
+            - metric_name: NetworkOut
+              statistics:
+                - Sum
+            - metric_name: StatusCheckFailed
+              statistics:
+                - Sum
+        # RDS database metrics (basic — see awscloudwatch-rds-aurora.yaml for full coverage)
+        - namespace: AWS/RDS
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            - metric_name: CPUUtilization
+              statistics:
+                - Average
+            - metric_name: FreeableMemory
+              statistics:
+                - Average
+            - metric_name: DatabaseConnections
+              statistics:
+                - Sum
+        # Application Load Balancer metrics (basic — see awscloudwatch-elb.yaml for full ALB+NLB coverage)
+        - namespace: AWS/ApplicationELB
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            - metric_name: RequestCount
+              statistics:
+                - Sum
+            - metric_name: TargetResponseTime
+              statistics:
+                - Average
+                - p99
+            - metric_name: HTTPCode_Target_5XX_Count
+              statistics:
+                - Sum

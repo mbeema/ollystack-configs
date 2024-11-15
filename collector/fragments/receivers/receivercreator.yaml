@@ -1,0 +1,38 @@
+# Receiver Creator
+# Dynamically creates receivers based on service discovery.
+# Watches for endpoints discovered by observer extensions (k8s_observer,
+# host_observer, docker_observer) and automatically configures receivers.
+#
+# Requires: An observer extension (k8s_observer, host_observer, or docker_observer).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=receivercreator.yaml
+receivers:
+  receiver_creator:
+    watch_observers:
+      - k8s_observer
+      # - host_observer
+      # - docker_observer
+    receivers:
+      # Auto-discover Redis instances by port
+      redis:
+        rule: type == "port" && port == 6379
+        config:
+          endpoint: '`endpoint`'
+          collection_interval: 60s
+      # Auto-discover MySQL instances by port
+      mysql:
+        rule: type == "port" && port == 3306
+        config:
+          endpoint: '`endpoint`'
+          username: ${MYSQL_USERNAME:-otel}
+          password: ${MYSQL_PASSWORD}
+          collection_interval: 60s
+      # Auto-discover PostgreSQL instances by port
+      postgresql:
+        rule: type == "port" && port == 5432
+        config:
+          endpoint: '`endpoint`'
+          username: ${POSTGRESQL_USERNAME:-postgres}
+          password: ${POSTGRESQL_PASSWORD}
+          collection_interval: 60s

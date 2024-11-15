@@ -1,0 +1,31 @@
+# CouchDB Receiver
+# Pulls metrics from Apache CouchDB via the /_node/_local/_stats HTTP API.
+# Covers request counts, database operations, open files, and HTTP status codes.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=couchdb.yaml
+receivers:
+  couchdb:
+    endpoint: ${COUCHDB_ENDPOINT:-http://localhost:5984}
+    username: ${COUCHDB_USERNAME}
+    password: ${COUCHDB_PASSWORD}
+    collection_interval: ${COUCHDB_INTERVAL:-60s}
+    metrics:
+      couchdb.average_request_time:
+        enabled: true
+      couchdb.database.open:
+        enabled: true
+      couchdb.database.operations:
+        enabled: true
+      couchdb.file_descriptor.open:
+        enabled: true
+      couchdb.httpd.bulk_requests:
+        enabled: true
+      couchdb.httpd.requests:
+        enabled: true
+      couchdb.httpd.responses:
+        enabled: true
+      couchdb.httpd.temporary_view_reads:
+        enabled: true
+      couchdb.httpd.view_reads:
+        enabled: true

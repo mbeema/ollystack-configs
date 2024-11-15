@@ -1,0 +1,25 @@
+# HTTP Check Receiver
+# Performs synthetic HTTP checks against specified endpoints.
+# Generates metrics for response time, status codes, and availability.
+# Useful for uptime monitoring and SLA tracking.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=httpcheck.yaml
+receivers:
+  httpcheck:
+    collection_interval: ${HTTPCHECK_INTERVAL:-60s}
+    targets:
+      - endpoint: ${HTTPCHECK_TARGET_1:-https://example.com}
+        method: GET
+      # Add additional targets as needed:
+      # - endpoint: ${HTTPCHECK_TARGET_2:-https://api.example.com/health}
+      #   method: GET
+      # - endpoint: ${HTTPCHECK_TARGET_3:-https://app.example.com}
+      #   method: HEAD
+    metrics:
+      httpcheck.duration:
+        enabled: true
+      httpcheck.error:
+        enabled: true
+      httpcheck.status:
+        enabled: true

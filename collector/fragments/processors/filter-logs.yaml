@@ -1,0 +1,21 @@
+# Filter processor for logs - drop noisy or unwanted log entries.
+# Uses OTTL (OpenTelemetry Transformation Language) conditions.
+processors:
+  filter/logs:
+    error_mode: ignore
+    logs:
+      log_record:
+        # Drop health check logs (noisy and low value)
+        - 'IsMatch(body, "(?i)health\\s*check")'
+        - 'IsMatch(body, "(?i)GET /health")'
+        - 'IsMatch(body, "(?i)GET /readyz")'
+        - 'IsMatch(body, "(?i)GET /livez")'
+
+        # Drop DEBUG-level logs in production to reduce volume
+        - 'severity_number < SEVERITY_NUMBER_INFO'
+
+        # Drop Kubernetes liveness/readiness probe logs
+        - 'IsMatch(body, "(?i)kube-probe")'
+
+        # Drop logs from specific resource attributes (e.g., noisy sidecar containers)
+        - 'resource.attributes["k8s.container.name"] == "istio-proxy"'

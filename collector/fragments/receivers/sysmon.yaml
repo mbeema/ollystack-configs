@@ -1,0 +1,50 @@
+# Windows Sysmon Receiver (via Windows Event Log)
+# Collects Sysmon (System Monitor) security events from the
+# Microsoft-Windows-Sysmon/Operational event channel.
+#
+# Sysmon provides detailed process, network, and file activity logging
+# critical for threat detection and MITRE ATT&CK coverage:
+#   EID 1:  Process creation (T1059 Command Execution)
+#   EID 3:  Network connection (T1071 C2 Communication)
+#   EID 7:  Image loaded / DLL injection (T1055)
+#   EID 8:  CreateRemoteThread (T1055 Process Injection)
+#   EID 10: Process access (T1003 Credential Dumping)
+#   EID 11: File create (T1105 Ingress Tool Transfer)
+#   EID 12-14: Registry events (T1547 Persistence)
+#   EID 22: DNS query (T1071.004 DNS C2)
+#   EID 23: File delete archived (T1070.004 Indicator Removal)
+#   EID 25: Process tampering (T1562 Impair Defenses)
+#
+# Required: Sysmon installed on Windows hosts (sysinternals.com).
+#   sysmon64.exe -accepteula -i sysmonconfig.xml
+#
+# Usage:
+#   otelcol --config=base.yaml --config=sysmon.yaml
+receivers:
+  windowseventlog/sysmon:
+    channel: Microsoft-Windows-Sysmon/Operational
+    # Collect all security-relevant Sysmon event IDs
+    # Uncomment to filter specific event IDs only:
+    # raw: |
+    #   <QueryList>
+    #     <Query Id="0" Path="Microsoft-Windows-Sysmon/Operational">
+    #       <Select Path="Microsoft-Windows-Sysmon/Operational">
+    #         *[System[(EventID=1 or EventID=3 or EventID=7 or EventID=8
+    #           or EventID=10 or EventID=11 or EventID=12 or EventID=13
+    #           or EventID=14 or EventID=22 or EventID=23 or EventID=25)]]
+    #       </Select>
+    #     </Query>
+    #   </QueryList>
+    operators:
+      # Enrich with security context
+      - type: add
+        field: resource["security.tool"]
+        value: sysmon
+      - type: add
+        field: resource["security.category"]
+        value: endpoint
+      # Extract event ID for routing and alerting
+      - type: move
+        from: attributes["event_id.qualifiers"]
+        to: attributes["sysmon.event_id"]
+        if: attributes["event_id.qualifiers"] != nil

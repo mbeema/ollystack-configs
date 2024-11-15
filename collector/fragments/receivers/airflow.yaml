@@ -1,0 +1,44 @@
+# Apache Airflow Receiver (via Prometheus scrape)
+# Scrapes metrics from Apache Airflow's StatsD/Prometheus exporter.
+# Monitors DAG runs, task execution, scheduler health, executor
+# utilization, and pool capacity for data pipeline observability.
+#
+# Airflow 2.7+ supports native OpenTelemetry tracing (pip install
+# apache-airflow[otel]), but metrics still flow via StatsD/Prometheus.
+#
+# Enable Prometheus metrics in Airflow:
+#   airflow.cfg:
+#     [metrics]
+#     statsd_on = True
+#     statsd_host = localhost
+#     statsd_port = 8125
+#   Then use statsd_exporter to convert to Prometheus format.
+#
+# Or use airflow-exporter: github.com/epoch8/airflow-exporter
+#
+# Usage:
+#   otelcol --config=base.yaml --config=airflow.yaml
+receivers:
+  prometheus/airflow:
+    config:
+      scrape_configs:
+        - job_name: airflow
+          scrape_interval: ${AIRFLOW_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${AIRFLOW_EXPORTER_TARGETS:-["localhost:9112"]}
+              labels:
+                component: data-pipeline
+          # Kubernetes discovery
+          # kubernetes_sd_configs:
+          #   - role: pod
+          #     namespaces:
+          #       names: ["airflow"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_component]
+          #     action: keep
+          #     regex: (webserver|scheduler|worker)
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "airflow_(dag_processing_total_parse_time|dag_processing_processes|dagrun_duration_success_.*|dagrun_duration_failed_.*|dagbag_size|dag_processing_import_errors|executor_queued_tasks|executor_running_tasks|executor_open_slots|pool_open_slots_.*|pool_queued_slots_.*|pool_running_slots_.*|scheduler_heartbeat|scheduler_critical_section_duration|scheduler_tasks_killed_externally|task_instance_created_.*|task_instance_duration_.*|task_instance_failures_total|task_instance_successes_total|ti_failures|ti_successes|zombie_killed|sla_missed)"

@@ -1,0 +1,31 @@
+# Alibaba Cloud Log Service Exporter
+# Exports traces, metrics, and logs to Alibaba Cloud Simple Log Service (SLS).
+# SLS provides real-time log analytics, metrics monitoring, and trace analysis.
+#
+# Supports: traces, metrics, logs
+#
+# Required env vars:
+#   ALIBABA_SLS_ENDPOINT       - SLS endpoint (e.g., cn-hangzhou.log.aliyuncs.com)
+#   ALIBABA_SLS_PROJECT        - SLS project name
+#   ALIBABA_SLS_LOGSTORE       - SLS logstore name
+#   ALIBABA_ACCESS_KEY_ID      - Alibaba Cloud AccessKey ID
+#   ALIBABA_ACCESS_KEY_SECRET  - Alibaba Cloud AccessKey Secret
+#
+# Usage:
+#   otelcol --config=base.yaml --config=alibabacloud.yaml
+exporters:
+  alibabacloud_logservice:
+    endpoint: ${ALIBABA_SLS_ENDPOINT}
+    project: ${ALIBABA_SLS_PROJECT}
+    logstore: ${ALIBABA_SLS_LOGSTORE}
+    access_key_id: ${ALIBABA_ACCESS_KEY_ID}
+    access_key_secret: ${ALIBABA_ACCESS_KEY_SECRET}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

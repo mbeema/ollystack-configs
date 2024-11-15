@@ -1,0 +1,24 @@
+# Google Cloud Monitoring Receiver — Cloud Tasks
+# Pulls Cloud Tasks queue metrics from Google Cloud Monitoring.
+# Covers task dispatch counts, queue depth, latency, and retry metrics.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-cloudtasks.yaml
+receivers:
+  googlecloudmonitoring/cloudtasks:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Queue ---
+      - metric_name: cloudtasks.googleapis.com/queue/depth
+      - metric_name: cloudtasks.googleapis.com/queue/task_attempt_count
+      - metric_name: cloudtasks.googleapis.com/queue/task_attempt_delays
+
+      # --- API ---
+      - metric_name: cloudtasks.googleapis.com/api/request_count
+      - metric_name: cloudtasks.googleapis.com/api/request_latencies

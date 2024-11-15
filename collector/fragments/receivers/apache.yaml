@@ -1,0 +1,43 @@
+# Apache HTTP Server Receiver
+# Pulls metrics from Apache httpd via the mod_status module.
+# Covers requests, traffic, workers, uptime, and scoreboard.
+#
+# Required: Apache httpd with mod_status enabled and ExtendedStatus On.
+#   Add to httpd.conf:
+#     <Location /server-status>
+#       SetHandler server-status
+#       Require local
+#     </Location>
+#     ExtendedStatus On
+#
+# Usage:
+#   otelcol --config=base.yaml --config=apache.yaml
+receivers:
+  apache:
+    endpoint: ${APACHE_ENDPOINT:-http://localhost:80/server-status?auto}
+    collection_interval: ${APACHE_INTERVAL:-60s}
+    metrics:
+      apache.current_connections:
+        enabled: true
+      apache.requests:
+        enabled: true
+      apache.traffic:
+        enabled: true
+      apache.uptime:
+        enabled: true
+      apache.workers:
+        enabled: true
+      apache.scoreboard:
+        enabled: true
+      apache.cpu.load:
+        enabled: true
+      apache.cpu.time:
+        enabled: true
+      apache.load.1:
+        enabled: true
+      apache.load.5:
+        enabled: true
+      apache.load.15:
+        enabled: true
+      apache.request.time:
+        enabled: true

@@ -1,0 +1,10 @@
+# SignalFx Receiver
+# Receives metrics and logs in SignalFx/Splunk Observability format.
+# Use this to accept data from existing SignalFx Smart Agent or
+# applications that emit SignalFx-format data.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=signalfx-receiver.yaml
+receivers:
+  signalfx:
+    endpoint: ${SIGNALFX_RECEIVER_ENDPOINT:-0.0.0.0:9943}

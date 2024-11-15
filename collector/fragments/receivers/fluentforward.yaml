@@ -1,0 +1,10 @@
+# Fluent Forward Receiver
+# Receives logs in Fluentd/Fluent Bit Forward protocol format.
+# Use this to accept data from existing Fluentd or Fluent Bit deployments
+# during migration to OpenTelemetry.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=fluentforward.yaml
+receivers:
+  fluentforward:
+    endpoint: ${FLUENTFORWARD_ENDPOINT:-0.0.0.0:8006}

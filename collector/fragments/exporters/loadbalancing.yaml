@@ -1,0 +1,26 @@
+# Load Balancing Exporter
+# Distributes trace spans across multiple downstream collectors using consistent hashing.
+# Ensures all spans for a given trace land on the same backend (tail-sampling friendly).
+
+exporters:
+  loadbalancing:
+    # Routing key determines how spans are distributed
+    # "traceID" ensures all spans of one trace go to the same backend
+    # "service" routes by service name for service-level aggregation
+    routing_key: traceID
+
+    # Underlying protocol used to forward spans to resolved backends
+    protocol:
+      otlp:
+        timeout: 30s
+        compression: gzip
+        tls:
+          insecure: ${LB_TLS_INSECURE:-true}
+
+    # DNS resolver — discovers backend collector instances by hostname
+    resolver:
+      dns:
+        # Hostname that resolves to multiple A/AAAA records (e.g., a headless K8s service)
+        hostname: ${LB_GATEWAY_HOSTNAME}
+        # Re-resolve interval to pick up scaling events
+        port: ${LB_GATEWAY_PORT:-4317}

@@ -1,0 +1,18 @@
+# Delta to Rate Processor
+# Converts delta sum metrics to rate metrics (per-second values).
+# Useful when you have counter-style delta metrics but need per-second rates
+# for dashboards and alerting.
+#
+# Example: A counter that increments by 150 over 30s becomes a gauge of 5/s.
+#
+# Note: Only works on delta sum metrics. Cumulative sums must first be
+# converted to delta using the cumulativetodelta processor.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=deltatorate.yaml
+processors:
+  deltatorate:
+    # Metrics to convert (empty = convert all delta sums)
+    # metrics:
+    #   - system.network.io
+    #   - system.disk.operations

@@ -1,0 +1,96 @@
+# AWS CloudWatch Receiver — EventBridge
+# Pulls EventBridge event bus and rule metrics from CloudWatch.
+# Covers matched events, invocations, failures, and throttling.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where EventBridge event buses reside
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-eventbridge.yaml
+receivers:
+  awscloudwatch/eventbridge:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        - namespace: AWS/Events
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Event Matching ---
+            - metric_name: MatchedEvents
+              statistics:
+                - Sum
+            - metric_name: TriggeredRules
+              statistics:
+                - Sum
+
+            # --- Target Invocations ---
+            - metric_name: Invocations
+              statistics:
+                - Sum
+            - metric_name: InvocationsFailedToBeSentToDlq
+              statistics:
+                - Sum
+            - metric_name: InvocationsSentToDlq
+              statistics:
+                - Sum
+
+            # --- Delivery Failures ---
+            - metric_name: FailedInvocations
+              statistics:
+                - Sum
+            - metric_name: ThrottledRules
+              statistics:
+                - Sum
+
+            # --- Event Bus Metrics ---
+            - metric_name: PutEventsRequestSize
+              statistics:
+                - Average
+            - metric_name: PutEventsSuccessfulEntries
+              statistics:
+                - Sum
+            - metric_name: PutEventsFailedEntries
+              statistics:
+                - Sum
+            - metric_name: PutEventsThrottledEntries
+              statistics:
+                - Sum
+            - metric_name: PutPartnerEventsSuccessfulEntries
+              statistics:
+                - Sum
+            - metric_name: PutPartnerEventsFailedEntries
+              statistics:
+                - Sum
+            - metric_name: PutPartnerEventsThrottledEntries
+              statistics:
+                - Sum
+
+            # --- Cross-Account / Cross-Region ---
+            - metric_name: IngestedEvents
+              statistics:
+                - Sum
+
+            # --- EventBridge Pipes ---
+            - metric_name: ExecutionStarted
+              statistics:
+                - Sum
+            - metric_name: ExecutionSucceeded
+              statistics:
+                - Sum
+            - metric_name: ExecutionFailed
+              statistics:
+                - Sum
+            - metric_name: ExecutionTimedOut
+              statistics:
+                - Sum
+            - metric_name: ExecutionThrottled
+              statistics:
+                - Sum
+            - metric_name: Backfill
+              statistics:
+                - Sum

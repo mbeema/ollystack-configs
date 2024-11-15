@@ -1,0 +1,19 @@
+# GeoIP Enrichment Processor
+# Enriches telemetry with geographic location data from IP addresses.
+# Uses MaxMind GeoLite2 or GeoIP2 databases to resolve IPs into
+# country, city, ASN, and coordinates.
+#
+# Essential for: network security (geo-anomaly detection), traffic
+# analysis (origin/destination mapping), and compliance (data residency).
+#
+# Required: MaxMind GeoLite2-City.mmdb database file.
+#   Download from: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+#
+# Usage:
+#   otelcol --config=base.yaml --config=geoip-enrichment.yaml
+processors:
+  geoip:
+    context: resource
+    providers:
+      maxmind:
+        database_path: ${GEOIP_DB_PATH:-/opt/otel/GeoLite2-City.mmdb}

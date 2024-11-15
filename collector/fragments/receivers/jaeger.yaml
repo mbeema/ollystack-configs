@@ -1,0 +1,28 @@
+# Jaeger Receiver
+# Receives trace spans in Jaeger format over gRPC and HTTP (Thrift).
+# Provides backward compatibility with Jaeger-instrumented applications.
+receivers:
+  jaeger:
+    protocols:
+      grpc:
+        # gRPC endpoint for Jaeger model.proto spans (standard Jaeger agent port)
+        endpoint: ${JAEGER_GRPC_ENDPOINT:-0.0.0.0:14250}
+        # Maximum inbound message size in bytes
+        max_recv_msg_size_mib: ${JAEGER_GRPC_MAX_RECV_MSG_SIZE_MIB:-8}
+        # TLS configuration (optional)
+        # tls:
+        #   cert_file: ${JAEGER_TLS_CERT_FILE}
+        #   key_file: ${JAEGER_TLS_KEY_FILE}
+      thrift_http:
+        # HTTP endpoint for Jaeger Thrift spans (standard Jaeger collector port)
+        endpoint: ${JAEGER_HTTP_ENDPOINT:-0.0.0.0:14268}
+        # CORS configuration for browser-based Jaeger clients
+        # cors:
+        #   allowed_origins: ["*"]
+        #   allowed_headers: ["*"]
+      # Thrift compact protocol over UDP (used by Jaeger agents)
+      # thrift_compact:
+      #   endpoint: ${JAEGER_THRIFT_COMPACT_ENDPOINT:-0.0.0.0:6831}
+      # Thrift binary protocol over UDP
+      # thrift_binary:
+      #   endpoint: ${JAEGER_THRIFT_BINARY_ENDPOINT:-0.0.0.0:6832}

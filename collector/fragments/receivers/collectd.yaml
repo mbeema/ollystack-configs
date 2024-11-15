@@ -1,0 +1,12 @@
+# collectd Receiver
+# Receives metrics in collectd JSON format over HTTP.
+# Use this to accept data from existing collectd deployments.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=collectd.yaml
+receivers:
+  collectd:
+    endpoint: ${COLLECTD_ENDPOINT:-0.0.0.0:8081}
+    # Default attributes to add to all metrics
+    default_attributes:
+      source: collectd

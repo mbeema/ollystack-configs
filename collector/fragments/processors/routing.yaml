@@ -1,0 +1,35 @@
+# Routing Processor
+# Routes traces, metrics, and logs to different exporters based on
+# resource attributes, record attributes, or context values.
+#
+# Use cases:
+# - Send production traces to one backend, staging to another
+# - Route logs by severity (errors to premium storage, info to cold storage)
+# - Multi-tenant routing (each team's telemetry to their own backend)
+# - Route high-priority services to a dedicated pipeline
+#
+# Note: Requires the routing connector for cross-pipeline routing.
+# This processor routes within a single pipeline to different exporters.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=routing.yaml
+processors:
+  routing:
+    # Attribute source: resource or context
+    from_attribute: ${ROUTING_ATTRIBUTE:-deployment.environment}
+    # Default exporters when no route matches
+    default_exporters:
+      - otlp
+    table:
+      # Route production to primary backend
+      - value: production
+        exporters:
+          - otlp
+      # Route staging to secondary/cheaper backend
+      - value: staging
+        exporters:
+          - otlp/staging
+      # Route development to debug exporter
+      - value: development
+        exporters:
+          - debug

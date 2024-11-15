@@ -1,0 +1,65 @@
+# AWS CloudWatch Receiver — SQS
+# Pulls SQS queue metrics from CloudWatch.
+# Covers queue depth, message age, send/receive/delete rates, and DLQ health.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where SQS queues reside
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-sqs.yaml
+receivers:
+  awscloudwatch/sqs:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        - namespace: AWS/SQS
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Queue Depth ---
+            # The number of messages available for retrieval
+            - metric_name: ApproximateNumberOfMessagesVisible
+              statistics:
+                - Average
+                - Maximum
+            # Messages in flight (received but not yet deleted)
+            - metric_name: ApproximateNumberOfMessagesNotVisible
+              statistics:
+                - Average
+                - Maximum
+            # Messages delayed (not yet available)
+            - metric_name: ApproximateNumberOfMessagesDelayed
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Message Age ---
+            # Age of the oldest message in queue (critical for DLQ alerting)
+            - metric_name: ApproximateAgeOfOldestMessage
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Throughput ---
+            - metric_name: NumberOfMessagesSent
+              statistics:
+                - Sum
+            - metric_name: NumberOfMessagesReceived
+              statistics:
+                - Sum
+            - metric_name: NumberOfMessagesDeleted
+              statistics:
+                - Sum
+            - metric_name: NumberOfEmptyReceives
+              statistics:
+                - Sum
+
+            # --- Message Size ---
+            - metric_name: SentMessageSize
+              statistics:
+                - Average
+                - Maximum

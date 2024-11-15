@@ -1,0 +1,19 @@
+# GitHub Receiver
+# Receives webhook events from GitHub and converts them to OTel traces/logs.
+# Covers push events, pull requests, issues, deployments, and workflow runs.
+#
+# Setup: Configure a GitHub webhook to POST to the collector's endpoint.
+# In your repo: Settings > Webhooks > Add webhook > Payload URL
+#
+# Usage:
+#   otelcol --config=base.yaml --config=github.yaml
+receivers:
+  github:
+    # Endpoint to listen for GitHub webhooks
+    endpoint: ${GITHUB_WEBHOOK_ENDPOINT:-0.0.0.0:19418}
+    # Path for the webhook handler
+    path: ${GITHUB_WEBHOOK_PATH:-/events}
+    # GitHub webhook secret for payload validation
+    secret: ${GITHUB_WEBHOOK_SECRET}
+    # Optional: custom service name
+    # service_name: github-events

@@ -1,0 +1,29 @@
+# Transform processor for logs - parse JSON bodies, extract fields, set severity.
+# Uses OTTL (OpenTelemetry Transformation Language) statements.
+processors:
+  transform/logs:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # Parse JSON log body into attributes if body is a JSON string
+          - merge_maps(attributes, ParseJSON(body), "upsert") where IsMatch(body, "^\\s*\\{")
+
+          # Extract severity from parsed JSON fields
+          - set(severity_text, attributes["level"]) where attributes["level"] != nil
+          - set(severity_number, SEVERITY_NUMBER_ERROR) where attributes["level"] == "error" or attributes["level"] == "ERROR"
+          - set(severity_number, SEVERITY_NUMBER_WARN) where attributes["level"] == "warn" or attributes["level"] == "WARN"
+          - set(severity_number, SEVERITY_NUMBER_INFO) where attributes["level"] == "info" or attributes["level"] == "INFO"
+          - set(severity_number, SEVERITY_NUMBER_DEBUG) where attributes["level"] == "debug" or attributes["level"] == "DEBUG"
+
+          # Extract common fields from parsed JSON
+          - set(attributes["trace_id"], attributes["traceId"]) where attributes["traceId"] != nil
+          - set(attributes["span_id"], attributes["spanId"]) where attributes["spanId"] != nil
+
+          # Extract message field to body for cleaner display
+          - set(body, attributes["message"]) where attributes["message"] != nil and IsMatch(body, "^\\s*\\{")
+
+          # Clean up temporary attributes
+          - delete_key(attributes, "level") where attributes["level"] != nil
+          - delete_key(attributes, "traceId") where attributes["traceId"] != nil
+          - delete_key(attributes, "spanId") where attributes["spanId"] != nil

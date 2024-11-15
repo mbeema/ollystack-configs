@@ -1,0 +1,110 @@
+# SAP HANA Receiver
+# Pulls metrics from SAP HANA database via SQL queries against monitoring views.
+# Covers memory, CPU, disk, connections, row store, column store, and alerts.
+#
+# Required: SAP HANA database user with MONITORING role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=saphana.yaml
+receivers:
+  saphana:
+    # SAP HANA connection endpoint
+    endpoint: ${SAPHANA_ENDPOINT}
+    # Example: hana-host:30015
+    username: ${SAPHANA_USERNAME}
+    password: ${SAPHANA_PASSWORD}
+    # Collection interval
+    collection_interval: ${SAPHANA_INTERVAL:-60s}
+    metrics:
+      saphana.alert.count:
+        enabled: true
+      saphana.backup.latest:
+        enabled: true
+      saphana.column_store.memory.used:
+        enabled: true
+      saphana.component.memory.used:
+        enabled: true
+      saphana.connection.count:
+        enabled: true
+      saphana.cpu.used:
+        enabled: true
+      saphana.disk.current_size:
+        enabled: true
+      saphana.disk.usage_current:
+        enabled: true
+      saphana.host.memory.current:
+        enabled: true
+      saphana.host.swap.current:
+        enabled: true
+      saphana.instance.code_size:
+        enabled: true
+      saphana.instance.memory.current:
+        enabled: true
+      saphana.instance.memory.shared.allocated:
+        enabled: true
+      saphana.instance.memory.used.peak:
+        enabled: true
+      saphana.license.expiration_date:
+        enabled: true
+      saphana.license.limit:
+        enabled: true
+      saphana.license.peak:
+        enabled: true
+      saphana.network.request.average_time:
+        enabled: true
+      saphana.network.request.count:
+        enabled: true
+      saphana.network.request.finished.count:
+        enabled: true
+      saphana.replication.average_time:
+        enabled: true
+      saphana.replication.backlog.size:
+        enabled: true
+      saphana.replication.backlog.time:
+        enabled: true
+      saphana.row_store.memory.used:
+        enabled: true
+      saphana.schema.memory.used.current:
+        enabled: true
+      saphana.schema.memory.used.max:
+        enabled: true
+      saphana.schema.operation.count:
+        enabled: true
+      saphana.schema.record.count:
+        enabled: true
+      saphana.schema.record.compressed.count:
+        enabled: true
+      saphana.service.code_size:
+        enabled: true
+      saphana.service.count:
+        enabled: true
+      saphana.service.memory.compactors.allocated:
+        enabled: true
+      saphana.service.memory.compactors.freeable:
+        enabled: true
+      saphana.service.memory.effective_limit:
+        enabled: true
+      saphana.service.memory.heap.current:
+        enabled: true
+      saphana.service.memory.limit:
+        enabled: true
+      saphana.service.memory.shared.current:
+        enabled: true
+      saphana.service.memory.used:
+        enabled: true
+      saphana.service.stack_size:
+        enabled: true
+      saphana.service.thread.count:
+        enabled: true
+      saphana.transaction.blocked:
+        enabled: true
+      saphana.transaction.count:
+        enabled: true
+      saphana.uptime:
+        enabled: true
+      saphana.volume.operation.count:
+        enabled: true
+      saphana.volume.operation.size:
+        enabled: true
+      saphana.volume.operation.time:
+        enabled: true

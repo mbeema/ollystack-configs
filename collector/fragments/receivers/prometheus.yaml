@@ -1,0 +1,48 @@
+# Prometheus Receiver
+# Scrapes metrics from Prometheus-compatible /metrics endpoints.
+# Supports the full Prometheus scrape_config specification.
+receivers:
+  prometheus:
+    config:
+      # Global scrape settings applied to all jobs unless overridden
+      global:
+        scrape_interval: ${PROMETHEUS_SCRAPE_INTERVAL:-30s}
+        scrape_timeout: ${PROMETHEUS_SCRAPE_TIMEOUT:-10s}
+        # External labels added to all scraped metrics
+        external_labels:
+          cluster: ${CLUSTER_NAME:-default}
+          environment: ${ENVIRONMENT:-production}
+      scrape_configs:
+        # Primary scrape job (customize target endpoints as needed)
+        - job_name: ${PROMETHEUS_JOB_NAME:-default}
+          scrape_interval: ${PROMETHEUS_SCRAPE_INTERVAL:-30s}
+          metrics_path: ${PROMETHEUS_METRICS_PATH:-/metrics}
+          scheme: ${PROMETHEUS_SCHEME:-http}
+          static_configs:
+            - targets: ${PROMETHEUS_TARGETS:-["localhost:9090"]}
+              labels:
+                service: ${PROMETHEUS_JOB_NAME:-default}
+          # Optional: HTTP basic auth
+          # basic_auth:
+          #   username: ${PROMETHEUS_BASIC_AUTH_USER}
+          #   password: ${PROMETHEUS_BASIC_AUTH_PASS}
+          # Optional: TLS configuration
+          # tls_config:
+          #   ca_file: ${PROMETHEUS_TLS_CA_FILE}
+          #   cert_file: ${PROMETHEUS_TLS_CERT_FILE}
+          #   key_file: ${PROMETHEUS_TLS_KEY_FILE}
+          #   insecure_skip_verify: false
+
+        # Kubernetes service discovery job (uncomment for K8s environments)
+        # - job_name: kubernetes-pods
+        #   kubernetes_sd_configs:
+        #     - role: pod
+        #   relabel_configs:
+        #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        #       action: keep
+        #       regex: true
+        #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        #       action: replace
+        #       target_label: __address__
+        #       regex: (.+)
+        #       replacement: ${1}:${2}

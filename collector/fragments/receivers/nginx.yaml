@@ -1,0 +1,24 @@
+# Nginx Receiver
+# Pulls metrics from Nginx via the stub_status module HTTP endpoint.
+# Covers active connections, requests, accepts, handled, reading/writing/waiting.
+#
+# Required: Nginx compiled with --with-http_stub_status_module and a
+# location block exposing /nginx_status (or equivalent).
+#
+# For Nginx Plus, use the Prometheus receiver with the Nginx Plus API instead.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=nginx.yaml
+receivers:
+  nginx:
+    endpoint: ${NGINX_ENDPOINT:-http://localhost:80/nginx_status}
+    collection_interval: ${NGINX_INTERVAL:-60s}
+    metrics:
+      nginx.connections_accepted:
+        enabled: true
+      nginx.connections_current:
+        enabled: true
+      nginx.connections_handled:
+        enabled: true
+      nginx.requests:
+        enabled: true

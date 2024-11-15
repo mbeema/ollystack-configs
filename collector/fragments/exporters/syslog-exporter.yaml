@@ -1,0 +1,37 @@
+# Syslog Exporter
+# Exports logs to a remote syslog server using RFC 5424 or RFC 3164 format.
+# Supports TCP and UDP transport with optional TLS encryption.
+#
+# Note: Named syslog-exporter to avoid conflict with the syslog receiver fragment.
+#
+# Supports: logs
+#
+# Required env vars:
+#   SYSLOG_EXPORT_ENDPOINT - Syslog server address (default: syslog-server:514)
+#
+# Optional env vars:
+#   SYSLOG_EXPORT_NETWORK   - Transport protocol: tcp or udp (default: tcp)
+#   SYSLOG_EXPORT_PROTOCOL  - Syslog format: rfc5424 or rfc3164 (default: rfc5424)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=syslog-exporter.yaml
+exporters:
+  syslog:
+    network: ${SYSLOG_EXPORT_NETWORK:-tcp}
+    endpoint: ${SYSLOG_EXPORT_ENDPOINT:-syslog-server:514}
+    protocol: ${SYSLOG_EXPORT_PROTOCOL:-rfc5424}
+    # TLS configuration (uncomment to enable)
+    # tls:
+    #   insecure: false
+    #   ca_file: ${SYSLOG_TLS_CA_FILE:-""}
+    #   cert_file: ${SYSLOG_TLS_CERT_FILE:-""}
+    #   key_file: ${SYSLOG_TLS_KEY_FILE:-""}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

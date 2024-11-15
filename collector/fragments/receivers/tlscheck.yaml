@@ -1,0 +1,11 @@
+# TLS Check Receiver
+# Monitors TLS certificate expiration and validity for endpoints.
+# Essential for proactive certificate management and preventing outages.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=tlscheck.yaml
+receivers:
+  tlscheck:
+    targets:
+      - url: ${TLS_CHECK_TARGET:-https://localhost:443}
+    collection_interval: ${TLS_CHECK_INTERVAL:-3600s}

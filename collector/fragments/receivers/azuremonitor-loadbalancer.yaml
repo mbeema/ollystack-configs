@@ -1,0 +1,35 @@
+# Azure Monitor Receiver — Load Balancer (Standard)
+# Pulls metrics from Azure Load Balancer (L4) via Azure Monitor API.
+# Covers data path availability, health probe status, connections, and SNAT.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-loadbalancer.yaml
+receivers:
+  azuremonitor/loadbalancer:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.Network/loadBalancers
+            metrics:
+              # --- Availability ---
+              - name: VipAvailability
+              - name: DipAvailability
+
+              # --- Data Path ---
+              - name: ByteCount
+              - name: PacketCount
+
+              # --- Connections ---
+              - name: SYNCount
+              - name: SnatConnectionCount
+              - name: AllocatedSnatPorts
+              - name: UsedSnatPorts
+              - name: GlobalBackendAvailability

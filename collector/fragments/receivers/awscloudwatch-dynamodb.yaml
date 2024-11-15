@@ -1,0 +1,115 @@
+# AWS CloudWatch Receiver — DynamoDB
+# Pulls DynamoDB table and GSI metrics from CloudWatch.
+# Covers consumed capacity, throttling, errors, latency, and returned items.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where DynamoDB tables reside
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-dynamodb.yaml
+receivers:
+  awscloudwatch/dynamodb:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # DynamoDB Table-Level Metrics
+        # -----------------------------------------------------------------
+        - namespace: AWS/DynamoDB
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # Capacity
+            - metric_name: ConsumedReadCapacityUnits
+              statistics:
+                - Sum
+                - Average
+            - metric_name: ConsumedWriteCapacityUnits
+              statistics:
+                - Sum
+                - Average
+            - metric_name: ProvisionedReadCapacityUnits
+              statistics:
+                - Average
+            - metric_name: ProvisionedWriteCapacityUnits
+              statistics:
+                - Average
+            # On-demand capacity (pay-per-request)
+            - metric_name: AccountProvisionedReadCapacityUtilization
+              statistics:
+                - Average
+            - metric_name: AccountProvisionedWriteCapacityUtilization
+              statistics:
+                - Average
+
+            # Throttling
+            - metric_name: ReadThrottleEvents
+              statistics:
+                - Sum
+            - metric_name: WriteThrottleEvents
+              statistics:
+                - Sum
+            - metric_name: ThrottledRequests
+              statistics:
+                - Sum
+
+            # Latency
+            - metric_name: SuccessfulRequestLatency
+              statistics:
+                - Average
+                - Maximum
+                - p99
+
+            # Errors
+            - metric_name: SystemErrors
+              statistics:
+                - Sum
+            - metric_name: UserErrors
+              statistics:
+                - Sum
+            - metric_name: ConditionalCheckFailedRequests
+              statistics:
+                - Sum
+            - metric_name: TransactionConflict
+              statistics:
+                - Sum
+
+            # Items
+            - metric_name: ReturnedItemCount
+              statistics:
+                - Sum
+                - Average
+            - metric_name: ReturnedBytes
+              statistics:
+                - Sum
+
+            # Streams (for DynamoDB Streams consumers)
+            - metric_name: ReturnedRecordsCount
+              statistics:
+                - Sum
+
+            # Time To Live (TTL) deletions
+            - metric_name: TimeToLiveDeletedItemCount
+              statistics:
+                - Sum
+
+            # Table size (emitted every 6 hours by AWS)
+            - metric_name: TableSize
+              statistics:
+                - Average
+            - metric_name: ItemCount
+              statistics:
+                - Average
+
+            # Global Tables (replication)
+            - metric_name: ReplicationLatency
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: PendingReplicationCount
+              statistics:
+                - Average

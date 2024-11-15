@@ -1,0 +1,10 @@
+# Batch processor - buffers and sends data in batches to reduce network overhead.
+# Tune timeout and batch size based on throughput requirements.
+processors:
+  batch:
+    # Maximum time to wait before sending a batch
+    timeout: ${BATCH_TIMEOUT:-5s}
+    # Preferred batch size (triggers send when reached)
+    send_batch_size: ${BATCH_SIZE:-8192}
+    # Hard upper limit - batch will never exceed this size
+    send_batch_max_size: 16384

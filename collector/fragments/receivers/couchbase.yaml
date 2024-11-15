@@ -1,0 +1,33 @@
+# Couchbase Receiver (via Prometheus scrape)
+# Scrapes metrics from Couchbase Server's built-in Prometheus endpoint.
+# (Note: This is Couchbase Server, NOT Apache CouchDB — see couchdb.yaml.)
+#
+# Covers: bucket operations (get/set/delete), memory/disk usage, vBucket
+# distribution, XDCR replication, N1QL query latency, index service,
+# view operations, and cluster rebalance status.
+#
+# Couchbase Server 7.0+ exposes Prometheus metrics natively on :8091.
+# Enable: Settings → General → Statistics → Enable Prometheus
+# Or via CLI: couchbase-cli setting-prometheus --enable 1
+#
+# Usage:
+#   otelcol --config=base.yaml --config=couchbase.yaml
+receivers:
+  prometheus/couchbase:
+    config:
+      scrape_configs:
+        - job_name: couchbase
+          scrape_interval: ${COUCHBASE_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          # Couchbase requires authentication for metrics
+          basic_auth:
+            username: ${COUCHBASE_USERNAME:-Administrator}
+            password: ${COUCHBASE_PASSWORD}
+          static_configs:
+            - targets: ${COUCHBASE_TARGETS:-["localhost:8091"]}
+              labels:
+                db.system: couchbase
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "kv_(ops|mem_used_bytes|disk_used_bytes|curr_items|vb_active_num|vb_replica_num|ep_cache_miss_rate|ep_resident_items_rate|ep_bg_fetched|ep_queue_size|ep_tmp_oom_errors)|cm_(rebalance_.*|failover_.*)|n1ql_(requests_total|request_duration_seconds_bucket|errors_total|warnings_total|active_requests|queued_requests)|index_(num_docs_indexed|num_docs_queued|data_size_bytes|disk_size_bytes|cache_hit_percent)|xdcr_(docs_written|data_replicated_bytes|changes_left|docs_failed_cr_source)"

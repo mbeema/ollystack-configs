@@ -1,0 +1,73 @@
+# Apache Spark Metrics Receiver
+# Pulls metrics from Apache Spark's REST API for applications and clusters.
+# Covers executors, stages, jobs, tasks, JVM metrics, and shuffle statistics.
+#
+# Required: Spark History Server or Spark Master REST API accessible.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=apachespark.yaml
+receivers:
+  apachespark:
+    endpoint: ${SPARK_ENDPOINT:-http://localhost:4040}
+    collection_interval: ${SPARK_INTERVAL:-60s}
+    # Optionally specify application IDs to monitor
+    # application_names: []
+    metrics:
+      spark.driver.block_manager.disk.usage:
+        enabled: true
+      spark.driver.block_manager.memory.usage:
+        enabled: true
+      spark.driver.dag_scheduler.job.active:
+        enabled: true
+      spark.driver.dag_scheduler.job.count:
+        enabled: true
+      spark.driver.dag_scheduler.stage.count:
+        enabled: true
+      spark.driver.dag_scheduler.stage.failed:
+        enabled: true
+      spark.driver.executor.gc_time:
+        enabled: true
+      spark.driver.executor.memory.execution:
+        enabled: true
+      spark.driver.executor.memory.jvm:
+        enabled: true
+      spark.driver.executor.memory.storage:
+        enabled: true
+      spark.driver.hive_external_catalog.file_cache_hits:
+        enabled: true
+      spark.driver.hive_external_catalog.files_discovered:
+        enabled: true
+      spark.driver.hive_external_catalog.partitions_fetched:
+        enabled: true
+      spark.driver.jvm_cpu_time:
+        enabled: true
+      spark.driver.live_listener_bus.queue_size:
+        enabled: true
+      spark.executor.disk_bytes_spilled:
+        enabled: true
+      spark.executor.gc_time:
+        enabled: true
+      spark.executor.input_bytes:
+        enabled: true
+      spark.executor.memory_bytes_spilled:
+        enabled: true
+      spark.executor.shuffle_bytes_read:
+        enabled: true
+      spark.executor.shuffle_bytes_written:
+        enabled: true
+      spark.executor.storage_memory:
+        enabled: true
+      spark.executor.task_count:
+        enabled: true
+      spark.executor.time:
+        enabled: true
+      spark.stage.active.count:
+        enabled: true
+      spark.stage.complete.count:
+        enabled: true
+      spark.stage.failed.count:
+        enabled: true
+      spark.stage.task.active:
+        enabled: true
+      spark.stage.task.result:
+        enabled: true

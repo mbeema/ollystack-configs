@@ -1,0 +1,53 @@
+# Azure Monitor Receiver — Event Hubs
+# Pulls metrics from Azure Event Hubs namespaces.
+# Covers throughput, connections, errors, and capture metrics.
+#
+# Note: This receiver pulls Azure Monitor metrics about Event Hubs.
+# The separate azureeventhub receiver (azureeventhub.yaml) consumes
+# data FROM Event Hubs. Use both together for complete coverage.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-eventhubs.yaml
+receivers:
+  azuremonitor/eventhubs:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.EventHub/namespaces
+            metrics:
+              # --- Throughput ---
+              - name: IncomingMessages
+              - name: OutgoingMessages
+              - name: IncomingBytes
+              - name: OutgoingBytes
+              - name: IncomingRequests
+
+              # --- Connections ---
+              - name: ActiveConnections
+              - name: ConnectionsOpened
+              - name: ConnectionsClosed
+
+              # --- Errors ---
+              - name: SuccessfulRequests
+              - name: ThrottledRequests
+              - name: ServerErrors
+              - name: UserErrors
+              - name: QuotaExceededErrors
+
+              # --- Capture (if Event Hubs Capture is enabled) ---
+              - name: CapturedMessages
+              - name: CapturedBytes
+              - name: CaptureBacklog
+
+              # --- Resource Usage ---
+              - name: NamespaceCpuUsage
+              - name: NamespaceMemoryUsage
+              - name: Size

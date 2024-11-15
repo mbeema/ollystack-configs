@@ -1,0 +1,54 @@
+# Oracle DB Receiver
+# Pulls metrics from Oracle Database via SQL queries against V$ performance views.
+# Covers sessions, tablespace, CPU, memory, wait events, and redo logs.
+#
+# Required: Oracle client libraries and a database user with SELECT on V$ views.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=oracledb.yaml
+receivers:
+  oracledb:
+    # Oracle connection string (Easy Connect format)
+    datasource: ${ORACLE_DATASOURCE}
+    # Example: oracle://user:pass@host:1521/service_name
+    # Collection interval
+    collection_interval: ${ORACLE_INTERVAL:-60s}
+    metrics:
+      oracledb.cpu_time:
+        enabled: true
+      oracledb.enqueue_deadlocks:
+        enabled: true
+      oracledb.exchange_deadlocks:
+        enabled: true
+      oracledb.executions:
+        enabled: true
+      oracledb.hard_parses:
+        enabled: true
+      oracledb.logical_reads:
+        enabled: true
+      oracledb.parse_calls:
+        enabled: true
+      oracledb.pga_memory:
+        enabled: true
+      oracledb.physical_reads:
+        enabled: true
+      oracledb.user_commits:
+        enabled: true
+      oracledb.user_rollbacks:
+        enabled: true
+      oracledb.sessions.usage:
+        enabled: true
+      oracledb.processes.usage:
+        enabled: true
+      oracledb.processes.limit:
+        enabled: true
+      oracledb.sessions.limit:
+        enabled: true
+      oracledb.tablespace_size.limit:
+        enabled: true
+      oracledb.tablespace_size.usage:
+        enabled: true
+      oracledb.db_block_gets:
+        enabled: true
+      oracledb.consistent_gets:
+        enabled: true

@@ -1,0 +1,16 @@
+# F5 BIG-IP Receiver
+# Collects metrics from F5 BIG-IP load balancers via iControl REST API.
+# Monitors virtual servers, pools, pool members, and node statistics.
+#
+# Required: iControl REST API credentials with at least guest access.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=bigip.yaml
+receivers:
+  bigip:
+    endpoint: ${BIGIP_ENDPOINT}
+    username: ${BIGIP_USERNAME}
+    password: ${BIGIP_PASSWORD}
+    collection_interval: ${BIGIP_INTERVAL:-60s}
+    tls:
+      insecure_skip_verify: ${BIGIP_TLS_INSECURE:-false}

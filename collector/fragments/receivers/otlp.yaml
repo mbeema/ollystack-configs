@@ -1,0 +1,40 @@
+# OTLP Receiver
+# Receives telemetry via OpenTelemetry Protocol over gRPC and HTTP.
+# This is the primary ingestion endpoint for OTLP-native instrumentation.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        # gRPC endpoint for OTLP data ingestion
+        endpoint: ${OTLP_GRPC_ENDPOINT:-0.0.0.0:4317}
+        # Maximum inbound message size in bytes (default 4MB; raised for large batches)
+        max_recv_msg_size_mib: ${OTLP_GRPC_MAX_RECV_MSG_SIZE_MIB:-16}
+        # Keepalive settings to detect dead connections and free resources
+        keepalive:
+          server_parameters:
+            # Maximum time a connection may exist before it is gracefully closed
+            max_connection_age: ${OTLP_GRPC_MAX_CONN_AGE:-300s}
+            # Grace period after max_connection_age before forceful close
+            max_connection_age_grace: ${OTLP_GRPC_MAX_CONN_AGE_GRACE:-60s}
+            # Ping interval when there is no activity on the connection
+            time: ${OTLP_GRPC_KEEPALIVE_TIME:-30s}
+            # Timeout for a keepalive ping acknowledgement
+            timeout: ${OTLP_GRPC_KEEPALIVE_TIMEOUT:-10s}
+          enforcement_policy:
+            # Minimum time between client pings (prevents aggressive clients)
+            min_time: ${OTLP_GRPC_MIN_PING_TIME:-10s}
+            # Allow pings even when there are no active streams
+            permit_without_stream: true
+        # TLS configuration (optional; uncomment for mTLS)
+        # tls:
+        #   cert_file: ${OTLP_TLS_CERT_FILE}
+        #   key_file: ${OTLP_TLS_KEY_FILE}
+        #   client_ca_file: ${OTLP_TLS_CLIENT_CA_FILE}
+      http:
+        # HTTP endpoint for OTLP data ingestion (supports protobuf and JSON)
+        endpoint: ${OTLP_HTTP_ENDPOINT:-0.0.0.0:4318}
+        # CORS configuration for browser-based OTLP exporters
+        cors:
+          allowed_origins: ${OTLP_HTTP_CORS_ORIGINS:-["*"]}
+          allowed_headers: ["*"]
+          max_age: 7200

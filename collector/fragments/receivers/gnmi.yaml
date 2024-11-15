@@ -1,0 +1,41 @@
+# gNMI Receiver (gRPC Network Management Interface)
+# Collects streaming telemetry from network devices via gNMI Subscribe.
+# Supports Cisco IOS-XR/NX-OS, Arista EOS, Juniper Junos, Nokia SR OS,
+# and other OpenConfig-compliant network equipment.
+#
+# Provides real-time telemetry for: interface counters, BGP neighbors,
+# LLDP topology, OSPF adjacency, CPU/memory utilization, optics power,
+# QoS queue depth, and ACL hit counts.
+#
+# gNMI replaces legacy SNMP polling with push-based streaming —
+# lower latency, lower CPU impact on devices, and structured data.
+#
+# Required: Network devices with gNMI enabled and OpenConfig models.
+#   Cisco IOS-XR: grpc port 57400
+#   Arista EOS:   management api gnmi, transport grpc
+#   Juniper:      set system services extension-service request-response grpc
+#
+# Usage:
+#   otelcol --config=base.yaml --config=gnmi.yaml
+receivers:
+  # Note: The OTel snmp receiver handles gNMI-like use cases via SNMP.
+  # For native gNMI, use the Prometheus receiver with a gNMI-to-Prometheus
+  # exporter (gnmic) or Telegraf with gnmi input plugin.
+  prometheus/gnmi:
+    config:
+      scrape_configs:
+        - job_name: gnmi
+          scrape_interval: ${GNMI_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          # Scrape gnmic Prometheus output (github.com/openconfig/gnmic)
+          # gnmic subscribe --target <device> --path /interfaces/interface/state/counters
+          #   --prometheus-address :9804
+          static_configs:
+            - targets: ${GNMI_EXPORTER_TARGETS:-["localhost:9804"]}
+              labels:
+                component: network-device
+          metric_relabel_configs:
+            # Keep interface counters and system metrics
+            - source_labels: [__name__]
+              action: keep
+              regex: "(interface_.*|bgp_.*|system_cpu_.*|system_memory_.*|optics_.*|lldp_.*|ospf_.*|qos_.*|acl_.*|gnmi_.*)"

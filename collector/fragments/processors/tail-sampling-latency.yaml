@@ -1,0 +1,20 @@
+# Tail sampling processor - keep traces exceeding a latency threshold.
+# Captures slow requests for performance analysis.
+processors:
+  tail_sampling/latency:
+    # Time to wait for all spans of a trace before making a decision
+    decision_wait: 10s
+    # Maximum number of traces held in memory
+    num_traces: 100000
+    # Expected new traces per second (for memory pre-allocation)
+    expected_new_traces_per_sec: 1000
+
+    policies:
+      # Keep traces with total duration exceeding the threshold (in ms)
+      - name: latency-policy
+        type: latency
+        latency:
+          threshold_ms: ${LATENCY_THRESHOLD:-1000}
+
+      # Upper bound to avoid capturing stuck/zombie traces
+          upper_threshold_ms: 30000

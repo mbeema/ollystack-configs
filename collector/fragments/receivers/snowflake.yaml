@@ -1,0 +1,98 @@
+# Snowflake Receiver
+# Pulls metrics from Snowflake data warehouse via the ACCOUNT_USAGE schema.
+# Covers warehouse load, query performance, storage, login history, and billing.
+#
+# Required: Snowflake account with ACCOUNTADMIN or a role with access to
+# SNOWFLAKE.ACCOUNT_USAGE views.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=snowflake.yaml
+receivers:
+  snowflake:
+    # Snowflake account identifier (e.g., xy12345.us-east-1)
+    account: ${SNOWFLAKE_ACCOUNT}
+    # Authentication
+    username: ${SNOWFLAKE_USERNAME}
+    password: ${SNOWFLAKE_PASSWORD}
+    # Optional: warehouse to use for queries (uses default if not set)
+    warehouse: ${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}
+    # Optional: role (needs ACCOUNT_USAGE access)
+    role: ${SNOWFLAKE_ROLE:-ACCOUNTADMIN}
+    # Optional: Snowflake database for queries
+    database: ${SNOWFLAKE_DATABASE:-SNOWFLAKE}
+    # Optional: schema
+    schema: ${SNOWFLAKE_SCHEMA:-ACCOUNT_USAGE}
+    # Collection interval
+    collection_interval: ${SNOWFLAKE_INTERVAL:-5m}
+    # Metrics to collect
+    metrics:
+      snowflake.billing.cloud_service.total:
+        enabled: true
+      snowflake.billing.total_credit.total:
+        enabled: true
+      snowflake.billing.virtual_warehouse.total:
+        enabled: true
+      snowflake.billing.warehouse.cloud_service.total:
+        enabled: true
+      snowflake.billing.warehouse.total_credit.total:
+        enabled: true
+      snowflake.billing.warehouse.virtual_warehouse.total:
+        enabled: true
+      snowflake.logins.total:
+        enabled: true
+      snowflake.logins.error.total:
+        enabled: true
+      snowflake.query.blocked:
+        enabled: true
+      snowflake.query.executed:
+        enabled: true
+      snowflake.query.queued_overload:
+        enabled: true
+      snowflake.query.queued_provision:
+        enabled: true
+      snowflake.query.bytes_deleted.avg:
+        enabled: true
+      snowflake.query.bytes_spilled.local.avg:
+        enabled: true
+      snowflake.query.bytes_spilled.remote.avg:
+        enabled: true
+      snowflake.query.bytes_written.avg:
+        enabled: true
+      snowflake.query.compilation_time.avg:
+        enabled: true
+      snowflake.query.data_scanned_cache.avg:
+        enabled: true
+      snowflake.query.execution_time.avg:
+        enabled: true
+      snowflake.query.partitions_scanned.avg:
+        enabled: true
+      snowflake.query.queued_overload_time.avg:
+        enabled: true
+      snowflake.query.queued_provision_time.avg:
+        enabled: true
+      snowflake.query.queued_repair_time.avg:
+        enabled: true
+      snowflake.query.rows_inserted.avg:
+        enabled: true
+      snowflake.query.rows_produced.avg:
+        enabled: true
+      snowflake.database.bytes_scanned.avg:
+        enabled: true
+      snowflake.database.query.count:
+        enabled: true
+      snowflake.storage.storage_bytes.total:
+        enabled: true
+      snowflake.storage.stage_bytes.total:
+        enabled: true
+      snowflake.storage.failsafe_bytes.total:
+        enabled: true
+      snowflake.pipe.credits_used.total:
+        enabled: true
+      snowflake.rows_inserted.avg:
+        enabled: true
+      snowflake.rows_deleted.avg:
+        enabled: true
+      snowflake.rows_updated.avg:
+        enabled: true
+      snowflake.session_id.count:
+        enabled: true

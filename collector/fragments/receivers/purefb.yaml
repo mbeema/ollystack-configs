@@ -1,0 +1,17 @@
+# Pure Storage FlashBlade Receiver
+# Collects performance and capacity metrics from Pure Storage FlashBlade.
+# Monitors file systems, buckets, array-level performance, and client connections.
+#
+# Required: FlashBlade API token with read permissions.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=purefb.yaml
+receivers:
+  purefb:
+    endpoint: ${PUREFB_ENDPOINT}
+    auth:
+      api_token: ${PUREFB_API_TOKEN}
+    env: ${PUREFB_ENV:-production}
+    tls:
+      insecure_skip_verify: ${PUREFB_TLS_INSECURE:-false}
+    collection_interval: ${PUREFB_INTERVAL:-60s}

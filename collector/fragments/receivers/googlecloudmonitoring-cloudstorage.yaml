@@ -1,0 +1,37 @@
+# Google Cloud Monitoring Receiver — Cloud Storage (GCS)
+# Pulls Cloud Storage bucket metrics from Google Cloud Monitoring.
+# Covers request counts, data transfer, object counts, and storage usage.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-cloudstorage.yaml
+receivers:
+  googlecloudmonitoring/cloudstorage:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- API Requests ---
+      - metric_name: storage.googleapis.com/api/request_count
+      - metric_name: storage.googleapis.com/api/object_count
+
+      # --- Storage Size ---
+      - metric_name: storage.googleapis.com/storage/total_bytes
+      - metric_name: storage.googleapis.com/storage/object_count
+
+      # --- Network ---
+      - metric_name: storage.googleapis.com/network/received_bytes_count
+      - metric_name: storage.googleapis.com/network/sent_bytes_count
+
+      # --- Authentication ---
+      - metric_name: storage.googleapis.com/authz/acl_based_object_access_count
+      - metric_name: storage.googleapis.com/authz/object_specific_acl_mutation_count
+
+      # --- Replication (Dual-region / Multi-region) ---
+      - metric_name: storage.googleapis.com/replication/objects_pending_replication_count
+
+      # --- Autoclass ---
+      - metric_name: storage.googleapis.com/autoclassification/transition_operation_count

@@ -1,0 +1,171 @@
+# AWS CloudWatch Receiver — Lambda
+# Pulls Lambda function metrics from CloudWatch.
+# Covers invocations, errors, duration, throttles, concurrency, and cold starts.
+#
+# This complements the Lambda platform config (platforms/aws/lambda/) which
+# handles in-function trace collection via the OTel Lambda Layer.
+# This receiver pulls aggregate CloudWatch metrics for fleet-level visibility.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where Lambda functions reside
+#
+# Note: Lambda Insights (enhanced monitoring) provides additional per-invocation
+# metrics (memory utilization, CPU time, etc.). Enable it via the Lambda console
+# or by adding the Lambda Insights extension layer.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-lambda.yaml
+receivers:
+  awscloudwatch/lambda:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # Lambda Function Metrics
+        # -----------------------------------------------------------------
+        - namespace: AWS/Lambda
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Invocation Counts ---
+            - metric_name: Invocations
+              statistics:
+                - Sum
+            - metric_name: Errors
+              statistics:
+                - Sum
+            - metric_name: DeadLetterErrors
+              statistics:
+                - Sum
+            - metric_name: DestinationDeliveryFailures
+              statistics:
+                - Sum
+
+            # --- Duration ---
+            - metric_name: Duration
+              statistics:
+                - Average
+                - Maximum
+                - Minimum
+                - p50
+                - p90
+                - p99
+            - metric_name: PostRuntimeExtensionsDuration
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Throttling ---
+            - metric_name: Throttles
+              statistics:
+                - Sum
+
+            # --- Concurrency ---
+            - metric_name: ConcurrentExecutions
+              statistics:
+                - Maximum
+            - metric_name: ProvisionedConcurrentExecutions
+              statistics:
+                - Maximum
+            - metric_name: ProvisionedConcurrencyInvocations
+              statistics:
+                - Sum
+            - metric_name: ProvisionedConcurrencySpilloverInvocations
+              statistics:
+                - Sum
+            - metric_name: ProvisionedConcurrencyUtilization
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: UnreservedConcurrentExecutions
+              statistics:
+                - Maximum
+            - metric_name: ClaimedAccountConcurrency
+              statistics:
+                - Maximum
+
+            # --- Iterator Age (for stream-based triggers: Kinesis, DynamoDB Streams) ---
+            - metric_name: IteratorAge
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Async Invocations ---
+            - metric_name: AsyncEventsReceived
+              statistics:
+                - Sum
+            - metric_name: AsyncEventAge
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: AsyncEventsDropped
+              statistics:
+                - Sum
+
+            # --- URL Function Metrics (Lambda Function URLs) ---
+            - metric_name: UrlRequestCount
+              statistics:
+                - Sum
+            - metric_name: UrlRequestLatency
+              statistics:
+                - Average
+                - Maximum
+                - p99
+
+        # -----------------------------------------------------------------
+        # Lambda Insights (Enhanced Monitoring - requires Insights layer)
+        # Namespace: LambdaInsights
+        # -----------------------------------------------------------------
+        - namespace: LambdaInsights
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Memory ---
+            - metric_name: memory_utilization
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: used_memory_max
+              statistics:
+                - Maximum
+            - metric_name: total_memory
+              statistics:
+                - Average
+
+            # --- CPU ---
+            - metric_name: cpu_total_time
+              statistics:
+                - Sum
+            - metric_name: total_network
+              statistics:
+                - Sum
+
+            # --- Init (Cold Start) ---
+            - metric_name: init_duration
+              statistics:
+                - Average
+                - Maximum
+                - p99
+
+            # --- Tmp Storage ---
+            - metric_name: tmp_used
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: tmp_max
+              statistics:
+                - Average
+
+            # --- Threads / File Descriptors ---
+            - metric_name: threads
+              statistics:
+                - Maximum
+            - metric_name: fd_use
+              statistics:
+                - Maximum
+            - metric_name: fd_max
+              statistics:
+                - Average

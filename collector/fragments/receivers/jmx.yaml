@@ -1,0 +1,35 @@
+# JMX Receiver
+# Pulls metrics from Java applications via JMX (Java Management Extensions).
+# Uses the OpenTelemetry JMX Metric Gatherer to query MBeans.
+# Covers JVM heap, GC, threads, class loading, and custom application MBeans.
+#
+# Supports built-in target systems: jvm, activemq, cassandra, hbase, hadoop,
+# jetty, kafka, kafka-consumer, kafka-producer, solr, tomcat, wildfly.
+#
+# Required: JMX Metric Gatherer JAR (downloads automatically on first run).
+# Target Java app must have JMX enabled:
+#   -Dcom.sun.management.jmxremote
+#   -Dcom.sun.management.jmxremote.port=9999
+#   -Dcom.sun.management.jmxremote.authenticate=false
+#   -Dcom.sun.management.jmxremote.ssl=false
+#
+# Usage:
+#   otelcol --config=base.yaml --config=jmx.yaml
+receivers:
+  jmx:
+    # JMX service URL
+    endpoint: ${JMX_ENDPOINT:-service:jmx:rmi:///jndi/rmi://localhost:9999/jmxrmi}
+    # Target system (provides predefined MBean queries)
+    target_system: ${JMX_TARGET_SYSTEM:-jvm}
+    # Collection interval
+    collection_interval: ${JMX_INTERVAL:-60s}
+    # Optional: JMX authentication
+    # username: ${JMX_USERNAME}
+    # password: ${JMX_PASSWORD}
+    # Path to the OTel JMX Metric Gatherer JAR
+    jar_path: ${JMX_JAR_PATH:-/opt/otel/opentelemetry-jmx-metrics.jar}
+    # Additional JVM args for the JMX gatherer process
+    # additional_jars: []
+    # Resource attributes to add to all metrics
+    resource_attributes:
+      service.name: ${OTEL_SERVICE_NAME:-jmx-target}

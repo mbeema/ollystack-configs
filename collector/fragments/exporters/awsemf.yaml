@@ -1,0 +1,47 @@
+# AWS CloudWatch EMF (Embedded Metric Format) Exporter
+# Converts OpenTelemetry metrics into CloudWatch Embedded Metric Format logs.
+# Enables high-cardinality metric publishing with dimension rollup control.
+
+exporters:
+  awsemf:
+    # CloudWatch namespace groups metrics logically (e.g., "MyApp/Production")
+    namespace: ${CW_EMF_NAMESPACE}
+
+    # Log group where EMF-formatted log events are written
+    log_group_name: ${CW_EMF_LOG_GROUP}
+    region: ${AWS_REGION}
+
+    # Dimension rollup — controls automatic creation of zero-dimension aggregations
+    # Options: NoDimensionRollup | SingleDimensionRollupOnly | ZeroAndSingleDimensionRollup
+    dimension_rollup_option: NoDimensionRollup
+
+    # Metric declarations map OTel metrics to CloudWatch dimensions and units
+    metric_declarations:
+      # HTTP server request metrics
+      - dimensions:
+          - - service.name
+            - http.method
+            - http.status_code
+        metric_name_selectors:
+          - http.server.request.duration
+          - http.server.active_requests
+
+      # Runtime and system metrics
+      - dimensions:
+          - - service.name
+        metric_name_selectors:
+          - process.runtime.*
+          - system.cpu.*
+          - system.memory.*
+
+    # Retry and queue settings for reliability
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

@@ -1,0 +1,18 @@
+# Azure Blob Storage Receiver
+# Reads telemetry data from Azure Blob Storage containers.
+# Supports Azure Event Grid notifications for real-time processing.
+#
+# Required: Storage account connection string or managed identity.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azureblob.yaml
+receivers:
+  azureblob:
+    connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+    # Event-driven: Azure Event Hub for blob created events
+    event_hub:
+      connection_string: ${AZURE_EVENTHUB_CONNECTION_STRING:-}
+    logs:
+      container_name: ${AZURE_BLOB_LOGS_CONTAINER:-logs}
+    traces:
+      container_name: ${AZURE_BLOB_TRACES_CONTAINER:-traces}

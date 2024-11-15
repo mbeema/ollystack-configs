@@ -1,0 +1,20 @@
+# Azure Event Hub Receiver
+# Consumes logs and metrics from Azure Event Hubs.
+# Azure services can stream diagnostics data to Event Hubs for collection.
+receivers:
+  azureeventhub:
+    # Event Hub connection string (includes endpoint, shared access key, entity path)
+    connection: ${AZURE_EVENTHUB_CONNECTION_STRING}
+    # Consumer group for this receiver instance (use unique groups per consumer)
+    group: ${AZURE_EVENTHUB_CONSUMER_GROUP:-$Default}
+    # Event Hub partition to read from (empty = all partitions)
+    partition: ${AZURE_EVENTHUB_PARTITION:-}
+    # Starting offset for reading events
+    offset: ${AZURE_EVENTHUB_OFFSET:-}
+    # Format of incoming events (loganalytics for Azure diagnostic logs)
+    format: ${AZURE_EVENTHUB_FORMAT:-azure}
+    # Apply timestamp from the Event Hub enqueued time
+    apply_enqueued_time_as_start: true
+    # Storage connection string for checkpointing (enables reliable reprocessing)
+    # storage_connection: ${AZURE_STORAGE_CONNECTION_STRING}
+    # storage_container: ${AZURE_STORAGE_CONTAINER:-otel-checkpoints}

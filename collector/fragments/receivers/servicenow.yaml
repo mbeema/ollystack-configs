@@ -1,0 +1,15 @@
+# ServiceNow Receiver
+# Receives change management and incident events from ServiceNow via webhook.
+# Configure ServiceNow Business Rules or Flow Designer to send HTTP notifications
+# to this endpoint for change tracking and deployment correlation.
+#
+# Note: Uses the webhook event receiver with ServiceNow-specific path.
+# For pulling ServiceNow data, use the sqlquery receiver with ServiceNow JDBC.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=servicenow.yaml
+receivers:
+  webhookevent/servicenow:
+    endpoint: ${SERVICENOW_WEBHOOK_ENDPOINT:-0.0.0.0:8089}
+    path: ${SERVICENOW_WEBHOOK_PATH:-/servicenow/events}
+    health_path: /health

@@ -1,0 +1,46 @@
+# Envoy Proxy Receiver (via Prometheus scrape)
+# Scrapes metrics from Envoy's built-in /stats/prometheus endpoint.
+# Envoy is the data plane proxy for Istio, Consul Connect, and standalone
+# deployments. Provides L4/L7 traffic, upstream/downstream, and circuit
+# breaker observability.
+#
+# Covers: request rates, latency histograms (P50/P95/P99), connection pools,
+# circuit breaker trips, retries, TLS handshakes, upstream health, and HTTP codes.
+#
+# Default admin port: 15000 (Istio sidecar), 9901 (standalone Envoy).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=envoy.yaml
+receivers:
+  prometheus/envoy:
+    config:
+      scrape_configs:
+        - job_name: envoy
+          scrape_interval: ${ENVOY_SCRAPE_INTERVAL:-15s}
+          metrics_path: /stats/prometheus
+          static_configs:
+            - targets: ${ENVOY_TARGETS:-["localhost:15000"]}
+              labels:
+                component: proxy
+                mesh.type: envoy
+          # Kubernetes: scrape all Istio sidecars via pod annotation
+          # kubernetes_sd_configs:
+          #   - role: pod
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_annotation_sidecar_istio_io_status]
+          #     action: keep
+          #     regex: ".+"
+          #   - source_labels: [__address__]
+          #     action: replace
+          #     regex: ([^:]+)(?::\d+)?
+          #     replacement: ${1}:15090
+          #     target_label: __address__
+          #   - source_labels: [__meta_kubernetes_pod_name]
+          #     target_label: pod
+          #   - source_labels: [__meta_kubernetes_namespace]
+          #     target_label: namespace
+          metric_relabel_configs:
+            # Keep essential Envoy/Istio metrics, drop internal stats
+            - source_labels: [__name__]
+              action: keep
+              regex: "envoy_(http_downstream_rq_total|http_downstream_rq_xx|http_downstream_cx_active|http_downstream_cx_total|http_downstream_rq_time_bucket|http_downstream_rq_time_sum|http_downstream_rq_time_count|cluster_upstream_rq_total|cluster_upstream_rq_xx|cluster_upstream_cx_active|cluster_upstream_cx_connect_fail|cluster_upstream_rq_time_bucket|cluster_upstream_rq_time_sum|cluster_upstream_rq_time_count|cluster_upstream_rq_retry|cluster_upstream_rq_retry_success|cluster_circuit_breakers_default_cx_open|cluster_circuit_breakers_default_rq_pending_open|cluster_health_check_healthy|server_live|server_memory_allocated|server_memory_heap_size)|istio_(requests_total|request_duration_milliseconds_bucket|request_bytes_bucket|response_bytes_bucket|tcp_connections_opened_total|tcp_connections_closed_total)"

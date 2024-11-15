@@ -1,0 +1,45 @@
+# NVIDIA DCGM GPU Receiver (via Prometheus scrape)
+# Scrapes metrics from NVIDIA Data Center GPU Manager (DCGM) Exporter.
+# Essential for AI/ML workloads — monitors GPU utilization, memory,
+# temperature, power, NVLink bandwidth, and ECC errors.
+#
+# DCGM Exporter is the industry standard for GPU observability. It runs
+# as a Kubernetes DaemonSet (via GPU Operator) or standalone container.
+#
+# Key use cases: LLM inference monitoring, training job optimization,
+# GPU right-sizing, thermal throttling detection, and GPU health alerts.
+#
+# Required: NVIDIA GPU Operator or dcgm-exporter container.
+#   Kubernetes: helm install gpu-operator nvidia/gpu-operator
+#   Docker: docker run -d --gpus all -p 9400:9400 nvcr.io/nvidia/k8s/dcgm-exporter
+#
+# Usage:
+#   otelcol --config=base.yaml --config=dcgm-gpu.yaml
+receivers:
+  prometheus/dcgm:
+    config:
+      scrape_configs:
+        - job_name: dcgm-gpu
+          scrape_interval: ${DCGM_SCRAPE_INTERVAL:-15s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${DCGM_TARGETS:-["localhost:9400"]}
+              labels:
+                component: gpu
+          # Kubernetes: discover DCGM exporter DaemonSet pods
+          # kubernetes_sd_configs:
+          #   - role: pod
+          #     namespaces:
+          #       names: ["gpu-operator"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_app]
+          #     action: keep
+          #     regex: nvidia-dcgm-exporter
+          #   - source_labels: [__meta_kubernetes_pod_node_name]
+          #     target_label: node
+          #   - source_labels: [__meta_kubernetes_pod_name]
+          #     target_label: pod
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "DCGM_FI_DEV_(GPU_UTIL|GPU_TEMP|POWER_USAGE|MEM_COPY_UTIL|FB_FREE|FB_USED|FB_TOTAL|CLOCK_SM|CLOCK_MEM|PCIE_TX_THROUGHPUT|PCIE_RX_THROUGHPUT|NVLINK_BANDWIDTH_TOTAL|ECC_SBE_VOL_TOTAL|ECC_DBE_VOL_TOTAL|XID_ERRORS|SM_CLOCK|MEM_CLOCK|POWER_VIOLATION|THERMAL_VIOLATION|TOTAL_ENERGY_CONSUMPTION|VGPU_LICENSE_STATUS)|DCGM_FI_PROF_(GR_ENGINE_ACTIVE|SM_ACTIVE|SM_OCCUPANCY|PIPE_TENSOR_ACTIVE|PIPE_FP64_ACTIVE|PIPE_FP32_ACTIVE|PIPE_FP16_ACTIVE|DRAM_ACTIVE|PCIE_TX_BYTES|PCIE_RX_BYTES)"

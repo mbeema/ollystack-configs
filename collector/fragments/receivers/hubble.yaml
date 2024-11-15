@@ -1,0 +1,57 @@
+# Cilium Hubble Receiver (via Prometheus scrape)
+# Scrapes metrics from Hubble, Cilium's eBPF-based network observability
+# layer. Provides L3/L4/L7 flow visibility without sidecars.
+#
+# Covers: flow rates (forward/drop/redirect), DNS queries, HTTP requests,
+# TCP flags, policy verdicts, identity-based traffic, and drop reasons.
+#
+# Hubble exposes metrics on port 9965 by default.
+# Enable via Cilium Helm: hubble.metrics.enabled with desired metric list.
+#
+# Cilium Helm values:
+#   hubble:
+#     metrics:
+#       enabled:
+#         - dns
+#         - drop
+#         - tcp
+#         - flow
+#         - port-distribution
+#         - httpV2:exemplars=true
+#
+# Usage:
+#   otelcol --config=base.yaml --config=hubble.yaml
+receivers:
+  prometheus/hubble:
+    config:
+      scrape_configs:
+        - job_name: hubble
+          scrape_interval: ${HUBBLE_SCRAPE_INTERVAL:-15s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${HUBBLE_TARGETS:-["localhost:9965"]}
+              labels:
+                component: network
+                mesh.type: cilium
+          # Kubernetes: discover Hubble pods
+          # kubernetes_sd_configs:
+          #   - role: pod
+          #     namespaces:
+          #       names: ["kube-system"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_k8s_app]
+          #     action: keep
+          #     regex: cilium
+          #   - source_labels: [__meta_kubernetes_pod_name]
+          #     target_label: pod
+          #   - source_labels: [__meta_kubernetes_pod_node_name]
+          #     target_label: node
+          #   - source_labels: [__address__]
+          #     action: replace
+          #     regex: ([^:]+)(?::\d+)?
+          #     replacement: ${1}:9965
+          #     target_label: __address__
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "hubble_(flows_processed_total|drop_total|drop_count_total|dns_queries_total|dns_responses_total|dns_response_types_total|tcp_flags_total|http_requests_total|http_request_duration_seconds_bucket|http_responses_total|port_distribution_total|policy_verdicts_total|forward_count_total)"

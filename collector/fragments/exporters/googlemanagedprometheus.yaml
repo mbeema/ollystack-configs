@@ -1,0 +1,24 @@
+# Google Managed Prometheus Exporter
+# Exports metrics to Google Cloud Managed Service for Prometheus (GMP).
+# Uses the Prometheus Remote Write protocol with Google Cloud authentication.
+#
+# Required: roles/monitoring.metricWriter
+# Required: GOOGLE_APPLICATION_CREDENTIALS or Workload Identity
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlemanagedprometheus.yaml
+exporters:
+  googlemanagedprometheus:
+    project: ${GCP_PROJECT_ID}
+    # Metric prefix (optional, defaults to prometheus.googleapis.com)
+    # metric:
+    #   prefix: prometheus.googleapis.com
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

@@ -1,0 +1,30 @@
+# Cumulative to Delta Processor
+# Converts cumulative sum/histogram metrics to delta temporality.
+# Required when exporting to backends that prefer delta metrics (e.g., Datadog,
+# Azure Monitor, some Prometheus Remote Write targets).
+#
+# How it works: Tracks the previous value of cumulative metrics and emits
+# the difference (delta) between consecutive data points.
+#
+# Note: Requires stateful tracking — first data point for each metric series
+# is dropped (no previous value to diff against).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=cumulativetodelta.yaml
+processors:
+  cumulativetodelta:
+    # Include specific metrics (empty = convert all cumulative metrics)
+    include:
+      match_type: ${CUMULATIVE_TO_DELTA_MATCH_TYPE:-strict}
+      metrics: []
+      # Example: only convert specific metrics
+      # metrics:
+      #   - system.cpu.time
+      #   - system.disk.io
+    # Exclude metrics from conversion
+    # exclude:
+    #   match_type: strict
+    #   metrics:
+    #     - system.cpu.utilization
+    # Maximum number of tracked metric series (prevents unbounded memory)
+    max_stale: ${CUMULATIVE_TO_DELTA_MAX_STALE:-5m}

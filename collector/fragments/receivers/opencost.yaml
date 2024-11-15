@@ -1,0 +1,40 @@
+# OpenCost Receiver (via Prometheus scrape)
+# Scrapes metrics from OpenCost, the CNCF Incubating project for
+# Kubernetes cost monitoring. Provides real-time cost allocation
+# by cluster, node, namespace, pod, container, and label.
+#
+# Essential for: FinOps, showback/chargeback, cost optimization,
+# identifying idle resources, and right-sizing recommendations.
+#
+# OpenCost uses cloud provider pricing APIs (AWS, Azure, GCP) or
+# custom CSV pricing for on-prem clusters.
+#
+# Install: helm install opencost opencost/opencost -n opencost
+# Metrics endpoint: port 9003 /metrics
+#
+# Usage:
+#   otelcol --config=base.yaml --config=opencost.yaml
+receivers:
+  prometheus/opencost:
+    config:
+      scrape_configs:
+        - job_name: opencost
+          scrape_interval: ${OPENCOST_SCRAPE_INTERVAL:-60s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${OPENCOST_TARGETS:-["localhost:9003"]}
+              labels:
+                component: cost
+          # Kubernetes discovery
+          # kubernetes_sd_configs:
+          #   - role: pod
+          #     namespaces:
+          #       names: ["opencost"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          #     action: keep
+          #     regex: opencost
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "opencost_(.*)|kubecost_(cluster_management_cost|network_.*|load_balancer_cost|node_is_spot|pv_monthly_cost)|container_(cpu_allocation|memory_allocation_bytes|gpu_allocation)|node_(cpu_hourly_cost|ram_hourly_cost|gpu_hourly_cost|total_hourly_cost|gpu_count)"

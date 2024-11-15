@@ -1,0 +1,57 @@
+# Falco Runtime Security Receiver (via HTTP webhook)
+# Receives Falco security alerts as logs via HTTP JSON webhook.
+# Falco detects container escapes, privilege escalation, cryptomining,
+# suspicious file access, and MITRE ATT&CK-mapped threats at runtime.
+#
+# Requires Falco configured with http_output:
+#   falco.yaml:
+#     http_output:
+#       enabled: true
+#       url: http://<collector>:${FALCO_PORT}/
+#
+# Usage:
+#   otelcol --config=base.yaml --config=falco.yaml
+receivers:
+  # Receives Falco JSON alerts over HTTP POST
+  httplogreceiver/falco:
+    endpoint: ${FALCO_ENDPOINT:-0.0.0.0:19080}
+    # Or use OTLP if Falco has OTel plugin installed:
+    # otlp/falco:
+    #   protocols:
+    #     grpc:
+    #       endpoint: ${FALCO_OTLP_ENDPOINT:-0.0.0.0:4317}
+
+  # Alternative: Falco outputs to a file, use filelog to tail it
+  filelog/falco:
+    include:
+      - ${FALCO_LOG_PATH:-/var/log/falco/events.json}
+    start_at: ${FALCO_START_AT:-end}
+    operators:
+      # Parse Falco JSON output
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.output_fields.evt.time
+          layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+      # Map Falco priority to OTel severity
+      - type: severity_parser
+        parse_from: attributes.priority
+        mapping:
+          fatal: emergency
+          error3: [alert, critical]
+          error: error
+          warn: [warning, notice]
+          info: [informational, debug]
+      # Enrich with security context
+      - type: add
+        field: resource["security.tool"]
+        value: falco
+      - type: add
+        field: resource["security.category"]
+        value: runtime
+      # Move rule name to structured attribute
+      - type: move
+        from: attributes.rule
+        to: attributes["security.rule.name"]
+      - type: move
+        from: attributes.priority
+        to: attributes["security.severity"]

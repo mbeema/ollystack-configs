@@ -1,0 +1,28 @@
+# Azure Data Explorer (Kusto) Exporter
+# Exports traces, metrics, and logs to Azure Data Explorer (ADX/Kusto).
+# ADX is ideal for high-volume telemetry analytics with KQL query support.
+#
+# Required: Azure AD app registration with Database Ingestor role on the ADX database.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuredataexplorer.yaml
+exporters:
+  azuredataexplorer:
+    cluster_uri: ${ADX_CLUSTER_URI}
+    application_id: ${ADX_APP_ID}
+    application_key: ${ADX_APP_KEY}
+    tenant_id: ${ADX_TENANT_ID}
+    db_name: ${ADX_DATABASE:-otel}
+    metrics_table_name: ${ADX_METRICS_TABLE:-OTELMetrics}
+    logs_table_name: ${ADX_LOGS_TABLE:-OTELLogs}
+    traces_table_name: ${ADX_TRACES_TABLE:-OTELTraces}
+    ingestion_type: ${ADX_INGESTION_TYPE:-managed}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

@@ -1,0 +1,25 @@
+# Span Processor
+# Modifies span names based on attributes or regex patterns.
+# Useful for normalizing span names across services, reducing cardinality,
+# and improving trace visualization in backends.
+#
+# Use cases:
+# - Replace dynamic URL segments with placeholders (/users/123 → /users/{id})
+# - Prefix span names with service.name for clarity
+# - Extract span name from specific attributes
+#
+# Usage:
+#   otelcol --config=base.yaml --config=span.yaml
+processors:
+  span:
+    # Rename spans based on attributes
+    name:
+      # Build span name from attributes (replaces existing name)
+      from_attributes:
+        - http.method
+        - http.route
+      separator: " "
+    # Set span status based on conditions
+    # status:
+    #   code: Error
+    #   description: "Span failed"

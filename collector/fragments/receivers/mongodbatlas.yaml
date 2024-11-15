@@ -1,0 +1,108 @@
+# MongoDB Atlas Receiver
+# Pulls metrics, logs, and alerts from MongoDB Atlas cloud service via the Atlas API.
+# Covers cluster metrics, process metrics, disk metrics, and project alerts.
+#
+# Required: MongoDB Atlas API key pair (public + private) with
+# Project Read Only or Organization Read Only role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=mongodbatlas.yaml
+receivers:
+  mongodbatlas:
+    # Atlas API authentication
+    public_key: ${MONGODB_ATLAS_PUBLIC_KEY}
+    private_key: ${MONGODB_ATLAS_PRIVATE_KEY}
+    collection_interval: ${MONGODB_ATLAS_INTERVAL:-60s}
+    # Optional: filter to specific projects
+    # project_name: ${MONGODB_ATLAS_PROJECT:-}
+    # Enable alerts collection
+    alerts:
+      enabled: true
+      # Poll interval for alerts
+      poll_interval: ${MONGODB_ATLAS_ALERT_INTERVAL:-5m}
+    # Enable log collection (requires Atlas M10+ clusters)
+    logs:
+      enabled: true
+      projects:
+        - name: ${MONGODB_ATLAS_PROJECT:-}
+          # Collect logs from all clusters in this project
+          collect_audit_logs: true
+    metrics:
+      # Process metrics (per-node)
+      mongodb.atlas.process.asserts:
+        enabled: true
+      mongodb.atlas.process.background_flush:
+        enabled: true
+      mongodb.atlas.process.cache.io:
+        enabled: true
+      mongodb.atlas.process.cache.size:
+        enabled: true
+      mongodb.atlas.process.connections:
+        enabled: true
+      mongodb.atlas.process.cpu.usage.max:
+        enabled: true
+      mongodb.atlas.process.cpu.usage.mean:
+        enabled: true
+      mongodb.atlas.process.cursors:
+        enabled: true
+      mongodb.atlas.process.db.document.rate:
+        enabled: true
+      mongodb.atlas.process.db.operations.rate:
+        enabled: true
+      mongodb.atlas.process.db.operations.time:
+        enabled: true
+      mongodb.atlas.process.db.query_executor.scanned:
+        enabled: true
+      mongodb.atlas.process.db.query_targeting.scanned_per_returned:
+        enabled: true
+      mongodb.atlas.process.db.storage:
+        enabled: true
+      mongodb.atlas.process.fts.cpu.usage:
+        enabled: true
+      mongodb.atlas.process.global_lock:
+        enabled: true
+      mongodb.atlas.process.index.btree_miss_ratio:
+        enabled: true
+      mongodb.atlas.process.index.counters:
+        enabled: true
+      mongodb.atlas.process.journaling.commits:
+        enabled: true
+      mongodb.atlas.process.journaling.data_files:
+        enabled: true
+      mongodb.atlas.process.journaling.written:
+        enabled: true
+      mongodb.atlas.process.memory.usage:
+        enabled: true
+      mongodb.atlas.process.network.io:
+        enabled: true
+      mongodb.atlas.process.network.requests:
+        enabled: true
+      mongodb.atlas.process.oplog.rate:
+        enabled: true
+      mongodb.atlas.process.oplog.time:
+        enabled: true
+      mongodb.atlas.process.page_faults:
+        enabled: true
+      mongodb.atlas.process.tickets:
+        enabled: true
+      # Disk metrics
+      mongodb.atlas.disk.partition.iops.average:
+        enabled: true
+      mongodb.atlas.disk.partition.iops.max:
+        enabled: true
+      mongodb.atlas.disk.partition.latency.average:
+        enabled: true
+      mongodb.atlas.disk.partition.latency.max:
+        enabled: true
+      mongodb.atlas.disk.partition.space.average:
+        enabled: true
+      mongodb.atlas.disk.partition.space.max:
+        enabled: true
+      mongodb.atlas.disk.partition.usage.average:
+        enabled: true
+      mongodb.atlas.disk.partition.usage.max:
+        enabled: true
+      mongodb.atlas.disk.partition.utilization.average:
+        enabled: true
+      mongodb.atlas.disk.partition.utilization.max:
+        enabled: true

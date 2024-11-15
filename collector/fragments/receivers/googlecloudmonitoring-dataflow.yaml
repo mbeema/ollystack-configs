@@ -1,0 +1,42 @@
+# Google Cloud Monitoring Receiver — Dataflow
+# Pulls Dataflow job and worker metrics from Google Cloud Monitoring.
+# Covers element counts, latency, CPU, memory, worker utilization, and backlog.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-dataflow.yaml
+receivers:
+  googlecloudmonitoring/dataflow:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Job-Level Metrics ---
+      - metric_name: dataflow.googleapis.com/job/current_num_vcpus
+      - metric_name: dataflow.googleapis.com/job/current_shuffle_slots
+      - metric_name: dataflow.googleapis.com/job/elapsed_time
+      - metric_name: dataflow.googleapis.com/job/is_active
+      - metric_name: dataflow.googleapis.com/job/per_stage_system_lag
+      - metric_name: dataflow.googleapis.com/job/per_stage_data_watermark_age
+
+      # --- Element Counts ---
+      - metric_name: dataflow.googleapis.com/job/element_count
+      - metric_name: dataflow.googleapis.com/job/estimated_byte_count
+
+      # --- Backlog ---
+      - metric_name: dataflow.googleapis.com/job/data_watermark_age
+      - metric_name: dataflow.googleapis.com/job/system_lag
+
+      # --- Billing ---
+      - metric_name: dataflow.googleapis.com/job/billable_shuffle_data_processed
+      - metric_name: dataflow.googleapis.com/job/total_memory_usage_time
+      - metric_name: dataflow.googleapis.com/job/total_pd_usage_time
+      - metric_name: dataflow.googleapis.com/job/total_shuffle_data_processed
+      - metric_name: dataflow.googleapis.com/job/total_streaming_data_processed
+      - metric_name: dataflow.googleapis.com/job/total_vcpu_time
+
+      # --- User Counters (if defined in pipeline) ---
+      - metric_name: dataflow.googleapis.com/job/user_counter

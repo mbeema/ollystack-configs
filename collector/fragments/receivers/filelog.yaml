@@ -1,0 +1,42 @@
+# File Log Receiver
+# Tails log files from disk and parses them into structured log records.
+# Suitable for applications that write logs to files rather than stdout.
+receivers:
+  filelog:
+    # Glob pattern for log files to tail
+    include: ${FILELOG_INCLUDE:-["/var/log/*.log"]}
+    # Exclude rotated/compressed files
+    exclude: ${FILELOG_EXCLUDE:-["/var/log/*.gz", "/var/log/*.zip"]}
+    # Start reading from the end of file on first run (avoid re-ingesting history)
+    start_at: ${FILELOG_START_AT:-end}
+    # Poll interval for new log lines
+    poll_interval: ${FILELOG_POLL_INTERVAL:-500ms}
+    # Maximum number of concurrent files to tail
+    max_concurrent_files: ${FILELOG_MAX_CONCURRENT:-64}
+    # Encoding of the log files
+    encoding: ${FILELOG_ENCODING:-utf-8}
+    # Multiline configuration: join stack traces with the preceding log line
+    multiline:
+      # Lines starting with a timestamp begin a new log entry
+      line_start_pattern: '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}'
+    # Operators define the parsing pipeline for each log line
+    operators:
+      # Parse the timestamp from the log line
+      - type: regex_parser
+        id: parse_timestamp
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.\d]*[Z]?[\+\-\d:]*)\s+(?P<remainder>.*)'
+        timestamp:
+          parse_from: attributes.timestamp
+          # Support multiple common timestamp layouts
+          layout_type: gotime
+          layout: '2006-01-02T15:04:05.000Z'
+        severity:
+          parse_from: attributes.remainder
+      # Extract the log file name as a resource attribute for filtering
+      - type: move
+        from: attributes["log.file.name"]
+        to: resource["log.file.name"]
+    # Fingerprint size for tracking file identity across rotations
+    fingerprint_size: ${FILELOG_FINGERPRINT_SIZE:-1kb}
+    # Storage for checkpoints so the receiver resumes after restart
+    # storage: file_storage

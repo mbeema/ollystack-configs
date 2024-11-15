@@ -1,0 +1,17 @@
+# RabbitMQ Receiver
+# Collects metrics from RabbitMQ message broker via the management API.
+# Monitors queues, exchanges, connections, channels, and message rates.
+#
+# Required: RabbitMQ Management Plugin enabled (port 15672).
+# Required: User with monitoring tag.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=rabbitmq.yaml
+receivers:
+  rabbitmq:
+    endpoint: ${RABBITMQ_ENDPOINT:-http://localhost:15672}
+    username: ${RABBITMQ_USERNAME:-guest}
+    password: ${RABBITMQ_PASSWORD:-guest}
+    collection_interval: ${RABBITMQ_INTERVAL:-60s}
+    tls:
+      insecure_skip_verify: ${RABBITMQ_TLS_INSECURE:-false}

@@ -1,0 +1,58 @@
+# StatsD Receiver
+# Receives metrics in StatsD format over UDP.
+# Compatible with legacy StatsD clients and DogStatsD extensions.
+receivers:
+  statsd:
+    # UDP endpoint to listen on for StatsD datagrams
+    endpoint: ${STATSD_ENDPOINT:-0.0.0.0:8125}
+    # Aggregation interval: how often to flush aggregated metrics
+    aggregation_interval: ${STATSD_AGGREGATION_INTERVAL:-60s}
+    # Enable DogStatsD-style tags (key:value format)
+    enable_metric_type: true
+    # Timer histogram bucket boundaries (in seconds)
+    timer_histogram_mapping:
+      - statsd_type: timing
+        observer_type: histogram
+        histogram:
+          # Explicit bucket boundaries for timer distributions
+          explicit:
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1.0
+            - 2.5
+            - 5.0
+            - 10.0
+      - statsd_type: histogram
+        observer_type: histogram
+        histogram:
+          explicit:
+            - 5
+            - 10
+            - 25
+            - 50
+            - 100
+            - 250
+            - 500
+            - 1000
+            - 5000
+            - 10000
+      - statsd_type: distribution
+        observer_type: histogram
+        histogram:
+          explicit:
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1.0
+            - 2.5
+            - 5.0
+            - 10.0

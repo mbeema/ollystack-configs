@@ -1,0 +1,75 @@
+# Google Cloud Monitoring Receiver — Memorystore (Redis & Memcached)
+# Pulls Memorystore instance metrics from Google Cloud Monitoring.
+# Covers cache hit/miss, connections, memory, CPU, and replication.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-memorystore.yaml
+receivers:
+  googlecloudmonitoring/memorystore:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # -----------------------------------------------------------------
+      # Memorystore for Redis
+      # -----------------------------------------------------------------
+      # --- Performance ---
+      - metric_name: redis.googleapis.com/stats/cache_hit_ratio
+      - metric_name: redis.googleapis.com/keyspace/avg_ttl
+      - metric_name: redis.googleapis.com/commands/total
+      - metric_name: redis.googleapis.com/commands/calls
+      - metric_name: redis.googleapis.com/commands/usec_per_call
+      - metric_name: redis.googleapis.com/stats/evicted_keys
+      - metric_name: redis.googleapis.com/stats/expired_keys
+      - metric_name: redis.googleapis.com/keyspace/keys
+
+      # --- CPU ---
+      - metric_name: redis.googleapis.com/stats/cpu_utilization
+      - metric_name: redis.googleapis.com/stats/cpu_utilization_main_thread
+
+      # --- Memory ---
+      - metric_name: redis.googleapis.com/stats/memory/usage_ratio
+      - metric_name: redis.googleapis.com/stats/memory/usage
+      - metric_name: redis.googleapis.com/stats/memory/maxmemory
+      - metric_name: redis.googleapis.com/stats/memory/system_memory_usage_ratio
+      - metric_name: redis.googleapis.com/stats/memory/system_memory_overload_duration
+
+      # --- Connections ---
+      - metric_name: redis.googleapis.com/clients/connected
+      - metric_name: redis.googleapis.com/clients/blocked
+
+      # --- Network ---
+      - metric_name: redis.googleapis.com/server/network/received_bytes_count
+      - metric_name: redis.googleapis.com/server/network/sent_bytes_count
+
+      # --- Replication ---
+      - metric_name: redis.googleapis.com/replication/master/slaves/lag
+      - metric_name: redis.googleapis.com/replication/master/slaves/offset
+      - metric_name: redis.googleapis.com/replication/role
+      - metric_name: redis.googleapis.com/replication/offset_diff
+
+      # --- Persistence ---
+      - metric_name: redis.googleapis.com/persistence/rdb/bgsave_in_progress
+
+      # --- Server ---
+      - metric_name: redis.googleapis.com/server/uptime
+
+      # -----------------------------------------------------------------
+      # Memorystore for Memcached
+      # -----------------------------------------------------------------
+      - metric_name: memcache.googleapis.com/node/cpu/usage_time
+      - metric_name: memcache.googleapis.com/node/memory/used_bytes
+      - metric_name: memcache.googleapis.com/node/cache/hit_ratio
+      - metric_name: memcache.googleapis.com/node/cache/eviction_count
+      - metric_name: memcache.googleapis.com/node/stats/items
+      - metric_name: memcache.googleapis.com/node/connections/current
+      - metric_name: memcache.googleapis.com/node/cmd/set_count
+      - metric_name: memcache.googleapis.com/node/cmd/get_count
+      - metric_name: memcache.googleapis.com/node/cmd/hit_count
+      - metric_name: memcache.googleapis.com/node/cmd/miss_count
+      - metric_name: memcache.googleapis.com/node/network/received_bytes_count
+      - metric_name: memcache.googleapis.com/node/network/sent_bytes_count

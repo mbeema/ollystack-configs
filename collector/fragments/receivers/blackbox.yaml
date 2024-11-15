@@ -1,0 +1,69 @@
+# Blackbox Exporter Receiver (via Prometheus scrape)
+# Scrapes metrics from Prometheus blackbox_exporter for synthetic probing.
+# Tests endpoint availability from the collector's perspective — HTTP, TCP,
+# DNS, ICMP, and gRPC probes with TLS certificate monitoring.
+#
+# Critical for: SLO measurement (availability SLIs), certificate expiry
+# alerting, DNS resolution checks, and network reachability validation.
+#
+# Required: blackbox_exporter running (github.com/prometheus/blackbox_exporter)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=blackbox.yaml
+receivers:
+  prometheus/blackbox:
+    config:
+      scrape_configs:
+        # HTTP probe targets
+        - job_name: blackbox-http
+          scrape_interval: ${BLACKBOX_SCRAPE_INTERVAL:-30s}
+          metrics_path: /probe
+          params:
+            module: [http_2xx]
+          static_configs:
+            - targets: ${BLACKBOX_HTTP_TARGETS:-["https://example.com"]}
+              labels:
+                probe_type: http
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: ${BLACKBOX_EXPORTER:-localhost:9115}
+
+        # TCP probe targets
+        - job_name: blackbox-tcp
+          scrape_interval: ${BLACKBOX_SCRAPE_INTERVAL:-30s}
+          metrics_path: /probe
+          params:
+            module: [tcp_connect]
+          static_configs:
+            - targets: ${BLACKBOX_TCP_TARGETS:-["localhost:443"]}
+              labels:
+                probe_type: tcp
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: ${BLACKBOX_EXPORTER:-localhost:9115}
+
+        # DNS probe targets
+        - job_name: blackbox-dns
+          scrape_interval: ${BLACKBOX_SCRAPE_INTERVAL:-30s}
+          metrics_path: /probe
+          params:
+            module: [dns_udp]
+          static_configs:
+            - targets: ${BLACKBOX_DNS_TARGETS:-["8.8.8.8"]}
+              labels:
+                probe_type: dns
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: ${BLACKBOX_EXPORTER:-localhost:9115}

@@ -1,0 +1,46 @@
+# Google Cloud Monitoring Receiver — BigQuery
+# Pulls BigQuery dataset, job, and slot metrics from Google Cloud Monitoring.
+# Covers query counts, slot utilization, stored bytes, table count, and streaming inserts.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-bigquery.yaml
+receivers:
+  googlecloudmonitoring/bigquery:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Jobs ---
+      - metric_name: bigquery.googleapis.com/job/num_in_flight
+      - metric_name: bigquery.googleapis.com/job/creation_count
+
+      # --- Query ---
+      - metric_name: bigquery.googleapis.com/query/count
+      - metric_name: bigquery.googleapis.com/query/execution_times
+      - metric_name: bigquery.googleapis.com/query/scanned_bytes
+      - metric_name: bigquery.googleapis.com/query/scanned_bytes_billed
+      - metric_name: bigquery.googleapis.com/query/statement_scanned_bytes
+
+      # --- Slots ---
+      - metric_name: bigquery.googleapis.com/slots/total_available
+      - metric_name: bigquery.googleapis.com/slots/total_used
+      - metric_name: bigquery.googleapis.com/slots/allocated_for_project
+      - metric_name: bigquery.googleapis.com/slots/allocated_for_reservation
+
+      # --- Storage ---
+      - metric_name: bigquery.googleapis.com/storage/stored_bytes
+      - metric_name: bigquery.googleapis.com/storage/table_count
+      - metric_name: bigquery.googleapis.com/storage/uploaded_bytes
+      - metric_name: bigquery.googleapis.com/storage/uploaded_bytes_billed
+      - metric_name: bigquery.googleapis.com/storage/uploaded_row_count
+
+      # --- Streaming ---
+      - metric_name: bigquery.googleapis.com/storage/streaming_insert_count
+
+      # --- BI Engine ---
+      - metric_name: bigquery.googleapis.com/bi_engine/memory_usage
+      - metric_name: bigquery.googleapis.com/bi_engine/memory_usage_ratio

@@ -1,0 +1,14 @@
+# Kubernetes Events Receiver
+# Watches Kubernetes events and converts them to OpenTelemetry log records.
+# Useful for capturing cluster-level events (scheduling, scaling, errors).
+receivers:
+  k8s_events:
+    # Authentication type for the Kubernetes API
+    auth_type: ${K8S_EVENTS_AUTH_TYPE:-serviceAccount}
+    # Namespaces to watch for events (empty list = all namespaces)
+    namespaces: ${K8S_EVENTS_NAMESPACES:-[]}
+    # Uncomment to restrict to specific namespaces:
+    # namespaces:
+    #   - default
+    #   - kube-system
+    #   - production

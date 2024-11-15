@@ -1,0 +1,56 @@
+# Network Topology Enrichment Processor
+# Enriches telemetry with network topology context: maps IP addresses
+# to network zones, CIDR ranges, datacenter locations, and VPC/subnet
+# identifiers for traffic analysis and security segmentation.
+#
+# Enables: east-west vs north-south traffic classification, zone-based
+# firewall policy validation, unexpected cross-zone communication
+# detection, and network cost attribution.
+#
+# Customize the CIDR-to-zone mappings below to match your network layout.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=network-topology-enrichment.yaml
+processors:
+  transform/network-topology:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # ── RFC 1918 Private Network Classification ──
+          # 10.0.0.0/8 — typically internal/datacenter
+          - set(attributes["network.zone"], "private-10") where IsMatch(attributes["net.peer.ip"], "^10\\.")
+          - set(attributes["network.zone"], "private-10") where IsMatch(attributes["server.address"], "^10\\.")
+          # 172.16.0.0/12
+          - set(attributes["network.zone"], "private-172") where IsMatch(attributes["net.peer.ip"], "^172\\.(1[6-9]|2[0-9]|3[01])\\.")
+          - set(attributes["network.zone"], "private-172") where IsMatch(attributes["server.address"], "^172\\.(1[6-9]|2[0-9]|3[01])\\.")
+          # 192.168.0.0/16
+          - set(attributes["network.zone"], "private-192") where IsMatch(attributes["net.peer.ip"], "^192\\.168\\.")
+          - set(attributes["network.zone"], "private-192") where IsMatch(attributes["server.address"], "^192\\.168\\.")
+
+          # ── Kubernetes Pod/Service CIDR (customize to your cluster) ──
+          # Default pod CIDR (EKS: 10.244.0.0/16, GKE: 10.0.0.0/14)
+          - set(attributes["network.zone"], "k8s-pods") where IsMatch(attributes["net.peer.ip"], "^10\\.244\\.")
+          # Default service CIDR
+          - set(attributes["network.zone"], "k8s-services") where IsMatch(attributes["net.peer.ip"], "^10\\.96\\.")
+
+          # ── Loopback / Link-local ──
+          - set(attributes["network.zone"], "loopback") where IsMatch(attributes["net.peer.ip"], "^127\\.")
+          - set(attributes["network.zone"], "link-local") where IsMatch(attributes["net.peer.ip"], "^169\\.254\\.")
+
+          # ── Public / External (anything not matched above) ──
+          - set(attributes["network.zone"], "external") where attributes["net.peer.ip"] != nil and attributes["network.zone"] == nil
+          - set(attributes["network.zone"], "external") where attributes["server.address"] != nil and attributes["network.zone"] == nil
+
+          # ── Traffic Direction Classification ──
+          # East-West: both source and destination are private
+          # North-South: one side is external
+          - set(attributes["network.traffic_direction"], "east-west") where attributes["network.zone"] != nil and attributes["network.zone"] != "external"
+          - set(attributes["network.traffic_direction"], "north-south") where attributes["network.zone"] == "external"
+
+    log_statements:
+      - context: log
+        statements:
+          # Tag network flow logs with zone context
+          - set(attributes["network.zone"], "private") where IsMatch(body, "(?i)(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.)")
+          - set(attributes["network.zone"], "external") where IsMatch(body, "(?i)(src|dst|source|destination)=[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+") and attributes["network.zone"] == nil

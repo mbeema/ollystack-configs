@@ -1,0 +1,86 @@
+# Azure Monitor Receiver — App Service (Web Apps)
+# Pulls metrics from Azure App Service via Azure Monitor API.
+# Covers requests, response time, errors, CPU, memory, and connections.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-appservice.yaml
+receivers:
+  azuremonitor/appservice:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          # -----------------------------------------------------------------
+          # App Service (Web Apps, API Apps)
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Web/sites
+            metrics:
+              # Requests & Responses
+              - name: Requests
+              - name: HttpResponseTime
+              - name: Http2xx
+              - name: Http3xx
+              - name: Http4xx
+              - name: Http401
+              - name: Http403
+              - name: Http404
+              - name: Http406
+              - name: Http5xx
+              - name: Http101
+
+              # Compute
+              - name: CpuTime
+              - name: AverageResponseTime
+              - name: MemoryWorkingSet
+              - name: AverageMemoryWorkingSet
+              - name: FunctionExecutionCount
+              - name: FunctionExecutionUnits
+
+              # Connections
+              - name: AppConnections
+              - name: Handles
+              - name: Threads
+              - name: PrivateBytes
+
+              # IO
+              - name: IoReadBytesPerSecond
+              - name: IoWriteBytesPerSecond
+              - name: IoOtherBytesPerSecond
+              - name: IoReadOperationsPerSecond
+              - name: IoWriteOperationsPerSecond
+
+              # Data Transfer
+              - name: BytesReceived
+              - name: BytesSent
+
+              # Health
+              - name: HealthCheckStatus
+
+          # -----------------------------------------------------------------
+          # App Service Plan (Server Farm)
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.Web/serverfarms
+            metrics:
+              - name: CpuPercentage
+              - name: MemoryPercentage
+              - name: DiskQueueLength
+              - name: HttpQueueLength
+              - name: BytesReceived
+              - name: BytesSent
+              - name: TcpSynSent
+              - name: TcpSynReceived
+              - name: TcpEstablished
+              - name: TcpFinWait1
+              - name: TcpFinWait2
+              - name: TcpClosing
+              - name: TcpCloseWait
+              - name: TcpTimeWait
+              - name: SocketInboundAll
+              - name: SocketOutboundAll

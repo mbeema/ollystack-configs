@@ -1,0 +1,10 @@
+# AWS ECS Container Metrics Receiver
+# Collects resource usage metrics from ECS tasks via the Task Metadata Endpoint.
+# Must run as a sidecar container within the ECS task definition.
+receivers:
+  awsecscontainermetrics:
+    # How often to collect ECS container metrics
+    collection_interval: ${ECS_METRICS_INTERVAL:-30s}
+    # The ECS Task Metadata Endpoint version (v4 is recommended)
+    # The endpoint URL is auto-discovered from the ECS_CONTAINER_METADATA_URI_V4
+    # environment variable injected by the ECS agent.

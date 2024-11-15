@@ -1,0 +1,21 @@
+# Alertmanager Exporter
+# Sends alerts to Prometheus Alertmanager based on telemetry data.
+# Useful for triggering alerts from OTel pipelines.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=alertmanager.yaml
+exporters:
+  alertmanager:
+    endpoint: ${ALERTMANAGER_ENDPOINT:-http://localhost:9093}
+    severity_text_as_label: true
+    default_severity: ${ALERTMANAGER_DEFAULT_SEVERITY:-info}
+    generator_url: ${ALERTMANAGER_GENERATOR_URL:-http://localhost:8888}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

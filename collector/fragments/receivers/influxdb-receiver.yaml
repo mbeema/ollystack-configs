@@ -1,0 +1,12 @@
+# InfluxDB Receiver
+# Receives metrics in InfluxDB line protocol format.
+# Use this to collect data from existing InfluxDB/Telegraf write pipelines
+# without changing the source configuration.
+#
+# Accepts InfluxDB line protocol over HTTP (compatible with /api/v2/write endpoint).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=influxdb-receiver.yaml
+receivers:
+  influxdb:
+    endpoint: ${INFLUXDB_RECEIVER_ENDPOINT:-0.0.0.0:8086}

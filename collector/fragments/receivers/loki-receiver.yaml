@@ -1,0 +1,16 @@
+# Loki Receiver
+# Receives logs in Grafana Loki push API format (POST /loki/api/v1/push).
+# Use this to accept data from Promtail, Grafana Agent, or any Loki-compatible
+# log shipper, enabling migration to OpenTelemetry.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=loki-receiver.yaml
+receivers:
+  loki:
+    protocols:
+      http:
+        endpoint: ${LOKI_RECEIVER_HTTP_ENDPOINT:-0.0.0.0:3100}
+      grpc:
+        endpoint: ${LOKI_RECEIVER_GRPC_ENDPOINT:-0.0.0.0:9096}
+    # Keep Loki tenant ID as attribute
+    use_incoming_timestamp: true

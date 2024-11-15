@@ -1,0 +1,17 @@
+# Pure Storage FlashArray Receiver
+# Collects performance and capacity metrics from Pure Storage FlashArray.
+# Monitors volumes, hosts, pods, directories, and array-level metrics.
+#
+# Required: FlashArray API token with read permissions.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=purefa.yaml
+receivers:
+  purefa:
+    endpoint: ${PUREFA_ENDPOINT}
+    auth:
+      api_token: ${PUREFA_API_TOKEN}
+    env: ${PUREFA_ENV:-production}
+    tls:
+      insecure_skip_verify: ${PUREFA_TLS_INSECURE:-false}
+    collection_interval: ${PUREFA_INTERVAL:-60s}

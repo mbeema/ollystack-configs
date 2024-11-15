@@ -1,0 +1,26 @@
+# Log Severity Filter
+# Configurable severity threshold to control log volume by environment.
+# Drops all logs BELOW the configured severity level.
+#
+# Severity levels (ascending): TRACE=1, DEBUG=5, INFO=9, WARN=13, ERROR=17, FATAL=21
+#
+# Common patterns:
+#   Production:  LOG_MIN_SEVERITY=SEVERITY_NUMBER_WARN   (keep WARN, ERROR, FATAL only)
+#   Staging:     LOG_MIN_SEVERITY=SEVERITY_NUMBER_INFO   (keep INFO and above)
+#   Development: LOG_MIN_SEVERITY=SEVERITY_NUMBER_DEBUG  (keep everything except TRACE)
+#
+# Usage:
+#   LOG_MIN_SEVERITY=SEVERITY_NUMBER_WARN otelcol --config=base.yaml --config=filter-logs-severity.yaml
+processors:
+  filter/log-severity:
+    error_mode: ignore
+    logs:
+      log_record:
+        # Drop logs below the configured severity threshold
+        # Default: drop below WARN (keeps WARN, ERROR, FATAL)
+        - 'severity_number != 0 and severity_number < ${LOG_MIN_SEVERITY:-SEVERITY_NUMBER_WARN}'
+
+        # Also drop logs with no severity set and no useful body
+        # (many noisy logs lack severity_number entirely)
+        # Uncomment to be aggressive about unclassified logs:
+        # - 'severity_number == 0 and not IsMatch(body, "(?i)(error|warn|fail|fatal|panic|exception)")'

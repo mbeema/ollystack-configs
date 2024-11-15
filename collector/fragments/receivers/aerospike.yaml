@@ -1,0 +1,39 @@
+# Aerospike Receiver
+# Pulls metrics from Aerospike database nodes via the info protocol.
+# Covers namespace stats, node stats, and set stats.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=aerospike.yaml
+receivers:
+  aerospike:
+    endpoint: ${AEROSPIKE_ENDPOINT:-localhost:3000}
+    collection_interval: ${AEROSPIKE_INTERVAL:-60s}
+    # Collect namespace-level metrics
+    collect_cluster_metrics: true
+    metrics:
+      aerospike.namespace.disk.available:
+        enabled: true
+      aerospike.namespace.memory.free:
+        enabled: true
+      aerospike.namespace.memory.usage:
+        enabled: true
+      aerospike.namespace.scan.count:
+        enabled: true
+      aerospike.namespace.transaction.count:
+        enabled: true
+      aerospike.namespace.geojson.region_query_cells:
+        enabled: true
+      aerospike.namespace.geojson.region_query_falsepos:
+        enabled: true
+      aerospike.namespace.geojson.region_query_points:
+        enabled: true
+      aerospike.namespace.geojson.region_query_reqs:
+        enabled: true
+      aerospike.node.connection.count:
+        enabled: true
+      aerospike.node.connection.open:
+        enabled: true
+      aerospike.node.memory.free:
+        enabled: true
+      aerospike.node.query.tracked:
+        enabled: true

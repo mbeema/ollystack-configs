@@ -1,0 +1,17 @@
+# Resource processor - inject static resource attributes into all telemetry.
+# Use this to tag data with service namespace and deployment environment.
+processors:
+  resource:
+    attributes:
+      # Service namespace groups related services together
+      - key: service.namespace
+        value: ${SERVICE_NAMESPACE:-default}
+        action: upsert
+      # Deployment environment (e.g., production, staging, development)
+      - key: deployment.environment
+        value: ${DEPLOYMENT_ENVIRONMENT:-production}
+        action: upsert
+      # Optional: add a cluster identifier
+      - key: k8s.cluster.name
+        value: ${CLUSTER_NAME:-""}
+        action: upsert

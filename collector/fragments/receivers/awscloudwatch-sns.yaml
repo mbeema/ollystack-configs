@@ -1,0 +1,61 @@
+# AWS CloudWatch Receiver — SNS
+# Pulls SNS topic and subscription metrics from CloudWatch.
+# Covers publish counts, delivery success/failure, message size, and SMS.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - AWS region where SNS topics reside
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-sns.yaml
+receivers:
+  awscloudwatch/sns:
+    region: ${AWS_REGION:-us-east-1}
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        - namespace: AWS/SNS
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Publishing ---
+            - metric_name: NumberOfMessagesPublished
+              statistics:
+                - Sum
+            - metric_name: PublishSize
+              statistics:
+                - Average
+                - Maximum
+
+            # --- Delivery ---
+            - metric_name: NumberOfNotificationsDelivered
+              statistics:
+                - Sum
+            - metric_name: NumberOfNotificationsFailed
+              statistics:
+                - Sum
+            - metric_name: NumberOfNotificationsFilteredOut
+              statistics:
+                - Sum
+            - metric_name: NumberOfNotificationsFilteredOut-NoMessageAttributes
+              statistics:
+                - Sum
+            - metric_name: NumberOfNotificationsFilteredOut-InvalidAttributes
+              statistics:
+                - Sum
+            - metric_name: NumberOfNotificationsRedrivenToDlq
+              statistics:
+                - Sum
+            - metric_name: NumberOfNotificationsFailedToRedriveToDlq
+              statistics:
+                - Sum
+
+            # --- SMS (if SNS is used for SMS delivery) ---
+            - metric_name: SMSSuccessRate
+              statistics:
+                - Average
+            - metric_name: SMSMonthToDateSpentUSD
+              statistics:
+                - Maximum

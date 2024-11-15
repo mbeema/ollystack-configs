@@ -1,0 +1,64 @@
+# Tail sampling processor - composite policy combining multiple strategies.
+# Ensures all errors and slow traces are kept, with probabilistic sampling for the rest.
+processors:
+  tail_sampling/composite:
+    # Time to wait for all spans of a trace before making a decision
+    decision_wait: 10s
+    # Maximum number of traces held in memory
+    num_traces: 100000
+    # Expected new traces per second (for memory pre-allocation)
+    expected_new_traces_per_sec: 1000
+
+    policies:
+      # Sub-policy 1: Keep all error traces (100%)
+      - name: errors
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # Sub-policy 2: Keep all slow traces > 2s (100%)
+      - name: slow-traces
+        type: latency
+        latency:
+          threshold_ms: 2000
+
+      # Sub-policy 3: Probabilistic sampling for everything else (10%)
+      - name: probabilistic-catchall
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+      # Composite policy to combine the above sub-policies
+      - name: composite-policy
+        type: composite
+        composite:
+          max_total_spans_per_second: 5000
+          policy_order:
+            - errors
+            - slow-traces
+            - probabilistic-catchall
+          composite_sub_policy:
+            # 100% of errors
+            - name: errors
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+            # 100% of slow traces
+            - name: slow-traces
+              type: latency
+              latency:
+                threshold_ms: 2000
+            # 10% of everything else
+            - name: probabilistic-catchall
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: 10
+          rate_allocation:
+            - policy: errors
+              percent: 40
+            - policy: slow-traces
+              percent: 30
+            - policy: probabilistic-catchall
+              percent: 30

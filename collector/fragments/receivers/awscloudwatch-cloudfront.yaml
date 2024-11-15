@@ -1,0 +1,123 @@
+# AWS CloudWatch Receiver — CloudFront
+# Pulls CloudFront distribution metrics from CloudWatch.
+# Covers request counts, data transfer, error rates, and cache hit ratio.
+#
+# Required IAM permissions:
+#   cloudwatch:GetMetricData
+#   cloudwatch:ListMetrics
+#
+# Required environment variables:
+#   AWS_REGION  - Must be us-east-1 (CloudFront metrics are only in us-east-1)
+#
+# Note: CloudFront publishes metrics ONLY to us-east-1, regardless of where
+# edge locations serve content. Always query from us-east-1.
+#
+# Additional metrics are available if you enable "Additional Metrics" on
+# the distribution in the CloudFront console (additional cost applies).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=awscloudwatch-cloudfront.yaml
+receivers:
+  awscloudwatch/cloudfront:
+    # CloudFront metrics are ONLY available in us-east-1
+    region: us-east-1
+    poll_interval: ${CLOUDWATCH_POLL_INTERVAL:-5m}
+    metrics:
+      named:
+        # -----------------------------------------------------------------
+        # CloudFront Default Metrics (always available)
+        # -----------------------------------------------------------------
+        - namespace: AWS/CloudFront
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Request Volume ---
+            - metric_name: Requests
+              statistics:
+                - Sum
+
+            # --- Data Transfer ---
+            - metric_name: BytesDownloaded
+              statistics:
+                - Sum
+            - metric_name: BytesUploaded
+              statistics:
+                - Sum
+            - metric_name: TotalErrorRate
+              statistics:
+                - Average
+
+            # --- Error Rates ---
+            - metric_name: 4xxErrorRate
+              statistics:
+                - Average
+            - metric_name: 5xxErrorRate
+              statistics:
+                - Average
+            - metric_name: 401ErrorRate
+              statistics:
+                - Average
+            - metric_name: 403ErrorRate
+              statistics:
+                - Average
+            - metric_name: 404ErrorRate
+              statistics:
+                - Average
+            - metric_name: 502ErrorRate
+              statistics:
+                - Average
+            - metric_name: 503ErrorRate
+              statistics:
+                - Average
+            - metric_name: 504ErrorRate
+              statistics:
+                - Average
+
+        # -----------------------------------------------------------------
+        # CloudFront Additional Metrics (requires opt-in, additional cost)
+        # Enable via CloudFront > Distribution > Monitoring > Enable Additional Metrics
+        # -----------------------------------------------------------------
+        - namespace: AWS/CloudFront
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            # --- Cache Performance ---
+            - metric_name: CacheHitRate
+              statistics:
+                - Average
+            - metric_name: OriginLatency
+              statistics:
+                - Average
+                - Maximum
+                - p50
+                - p90
+                - p99
+
+            # --- Connection Metrics ---
+            - metric_name: ConnectionAttempts
+              statistics:
+                - Sum
+            - metric_name: ConnectionCompleted
+              statistics:
+                - Sum
+
+        # -----------------------------------------------------------------
+        # CloudFront Functions Metrics
+        # -----------------------------------------------------------------
+        - namespace: AWS/CloudFront
+          period: ${CLOUDWATCH_PERIOD:-300s}
+          metrics:
+            - metric_name: FunctionInvocations
+              statistics:
+                - Sum
+            - metric_name: FunctionValidationErrors
+              statistics:
+                - Sum
+            - metric_name: FunctionExecutionErrors
+              statistics:
+                - Sum
+            - metric_name: FunctionComputeUtilization
+              statistics:
+                - Average
+                - Maximum
+            - metric_name: FunctionThrottles
+              statistics:
+                - Sum

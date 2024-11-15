@@ -1,0 +1,16 @@
+# Carbon Receiver
+# Receives metrics in Carbon/Graphite plaintext format.
+# Use this to collect metrics from legacy Graphite/StatsD pipelines
+# or applications that emit Carbon-format metrics.
+#
+# Compatible with Graphite's Carbon plaintext protocol (line format).
+#
+# Usage:
+#   otelcol --config=base.yaml --config=carbon.yaml
+receivers:
+  carbon:
+    endpoint: ${CARBON_ENDPOINT:-0.0.0.0:2003}
+    transport: ${CARBON_TRANSPORT:-tcp}
+    # Parser configuration
+    parser:
+      type: ${CARBON_PARSER_TYPE:-plaintext}

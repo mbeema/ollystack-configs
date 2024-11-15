@@ -1,0 +1,37 @@
+# Prometheus Remote Write Exporter
+# Pushes metrics to any Prometheus remote-write compatible endpoint
+# (e.g., Thanos, Cortex, Mimir, Grafana Cloud, Amazon Managed Prometheus).
+
+exporters:
+  prometheusremotewrite:
+    # Remote write endpoint URL
+    endpoint: ${PROMETHEUS_REMOTE_WRITE_ENDPOINT}
+    timeout: 30s
+
+    # Custom headers — commonly used for API key authentication
+    headers:
+      Authorization: ${PROMETHEUS_REMOTE_WRITE_AUTH:-""}
+      X-Scope-OrgID: ${PROMETHEUS_REMOTE_WRITE_TENANT_ID:-""}
+
+    # TLS configuration for secure endpoints
+    tls:
+      cert_file: ${PROM_RW_TLS_CERT_FILE:-""}
+      key_file: ${PROM_RW_TLS_KEY_FILE:-""}
+      ca_file: ${PROM_RW_TLS_CA_FILE:-""}
+      insecure: ${PROM_RW_TLS_INSECURE:-false}
+
+    # Convert OTel resource attributes to Prometheus labels on metrics
+    resource_to_telemetry_conversion:
+      enabled: true
+
+    # Retry and queue settings for reliability
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

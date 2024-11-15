@@ -1,0 +1,32 @@
+# ProxySQL Receiver (via Prometheus scrape)
+# Scrapes metrics from ProxySQL's built-in Prometheus endpoint or
+# a sidecar exporter (proxysql_exporter).
+#
+# Monitors: connection pool utilization, query routing, backend health,
+# query cache hits, multiplexing efficiency, hostgroup routing, and latency.
+#
+# Critical for MySQL/MariaDB high-availability setups — detects
+# connection exhaustion, backend failures, and query routing anomalies.
+#
+# Required: ProxySQL admin interface or proxysql_exporter.
+#   Enable via: SET admin-restapi_enabled='true';
+#
+# Usage:
+#   otelcol --config=base.yaml --config=proxysql.yaml
+receivers:
+  prometheus/proxysql:
+    config:
+      scrape_configs:
+        - job_name: proxysql
+          scrape_interval: ${PROXYSQL_SCRAPE_INTERVAL:-15s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${PROXYSQL_EXPORTER_TARGETS:-["localhost:42004"]}
+              labels:
+                component: connection-pool
+                db.system: mysql
+          metric_relabel_configs:
+            # Keep essential proxy health metrics
+            - source_labels: [__name__]
+              action: keep
+              regex: "proxysql_(connection_pool_bytes_data_recv|connection_pool_bytes_data_sent|connection_pool_conn_err|connection_pool_conn_free|connection_pool_conn_ok|connection_pool_conn_used|connection_pool_latency_us|connection_pool_queries|connection_pool_status|client_connections_connected|client_connections_created|server_connections_connected|server_connections_created|query_cache_entries|query_cache_memory_bytes|query_cache_purged|query_cache_bytes_in|query_cache_bytes_out|query_cache_get_total|query_cache_set_total|mysql_backend_buffers_bytes|mysql_frontend_buffers_bytes|mysql_session_internal_bytes|active_transactions|questions|slow_queries)"

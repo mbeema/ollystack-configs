@@ -1,0 +1,40 @@
+# Kafka Receiver
+# Consumes telemetry data from Apache Kafka topics.
+# Supports traces, metrics, and logs encoded in OTLP protobuf or JSON.
+receivers:
+  kafka:
+    # Comma-separated list of Kafka broker addresses
+    brokers: ${KAFKA_BROKERS:-["localhost:9092"]}
+    # Kafka topic to consume telemetry data from
+    topic: ${KAFKA_TOPIC:-otlp-spans}
+    # Consumer group ID (each collector instance in the same group shares partitions)
+    group_id: ${KAFKA_GROUP_ID:-otel-collector}
+    # Encoding of the messages on the topic
+    encoding: ${KAFKA_ENCODING:-otlp_proto}
+    # Client ID reported to the Kafka broker
+    client_id: ${KAFKA_CLIENT_ID:-otel-collector}
+    # Offset to start consuming from when no committed offset exists
+    initial_offset: ${KAFKA_INITIAL_OFFSET:-latest}
+    # SASL authentication (uncomment for secured Kafka clusters)
+    # auth:
+    #   sasl:
+    #     mechanism: ${KAFKA_SASL_MECHANISM:-PLAIN}
+    #     username: ${KAFKA_SASL_USERNAME}
+    #     password: ${KAFKA_SASL_PASSWORD}
+    #   tls:
+    #     ca_file: ${KAFKA_TLS_CA_FILE}
+    #     cert_file: ${KAFKA_TLS_CERT_FILE}
+    #     key_file: ${KAFKA_TLS_KEY_FILE}
+    #     insecure: false
+    # Metadata configuration
+    metadata:
+      # Whether to retry on metadata fetch failures
+      retry:
+        max: ${KAFKA_METADATA_RETRY_MAX:-3}
+        backoff: ${KAFKA_METADATA_RETRY_BACKOFF:-250ms}
+    # Auto-commit configuration
+    autocommit:
+      enable: true
+      interval: ${KAFKA_AUTOCOMMIT_INTERVAL:-5s}
+    # Maximum number of message bytes to fetch per request
+    max_fetch_size: ${KAFKA_MAX_FETCH_SIZE:-0}

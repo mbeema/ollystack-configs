@@ -1,0 +1,45 @@
+# Azure Monitor Receiver — Container Apps
+# Pulls metrics from Azure Container Apps via Azure Monitor API.
+# Covers requests, replicas, CPU, memory, network, and restarts.
+#
+# Required: Azure AD credentials with Monitoring Reader role.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azuremonitor-containerapps.yaml
+receivers:
+  azuremonitor/containerapps:
+    tenant_id: ${AZURE_TENANT_ID}
+    client_id: ${AZURE_CLIENT_ID}
+    client_secret: ${AZURE_CLIENT_SECRET}
+    subscription_id: ${AZURE_SUBSCRIPTION_ID}
+    cloud: ${AZURE_CLOUD:-AzureCloud}
+    collection_interval: ${AZURE_MONITOR_INTERVAL:-60s}
+    resource_groups:
+      - name: ${AZURE_RESOURCE_GROUP}
+        resources:
+          - resource_type: Microsoft.App/containerApps
+            metrics:
+              # --- Requests ---
+              - name: Requests
+              - name: RestartCount
+
+              # --- Replicas ---
+              - name: Replicas
+
+              # --- CPU ---
+              - name: UsageNanoCores
+
+              # --- Memory ---
+              - name: WorkingSetBytes
+
+              # --- Network ---
+              - name: RxBytes
+              - name: TxBytes
+
+          # -----------------------------------------------------------------
+          # Container Apps Environment (Managed Environment)
+          # -----------------------------------------------------------------
+          - resource_type: Microsoft.App/managedEnvironments
+            metrics:
+              - name: TotalCores
+              - name: TotalMemory

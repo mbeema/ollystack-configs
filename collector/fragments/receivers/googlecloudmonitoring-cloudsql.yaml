@@ -1,0 +1,67 @@
+# Google Cloud Monitoring Receiver — Cloud SQL
+# Pulls Cloud SQL (MySQL, PostgreSQL, SQL Server) metrics from Google Cloud Monitoring.
+# Covers CPU, memory, disk, connections, queries, replication, and InnoDB/PG-specific metrics.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-cloudsql.yaml
+receivers:
+  googlecloudmonitoring/cloudsql:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- CPU ---
+      - metric_name: cloudsql.googleapis.com/database/cpu/utilization
+      - metric_name: cloudsql.googleapis.com/database/cpu/reserved_cores
+
+      # --- Memory ---
+      - metric_name: cloudsql.googleapis.com/database/memory/utilization
+      - metric_name: cloudsql.googleapis.com/database/memory/total_usage
+      - metric_name: cloudsql.googleapis.com/database/memory/quota
+
+      # --- Disk ---
+      - metric_name: cloudsql.googleapis.com/database/disk/utilization
+      - metric_name: cloudsql.googleapis.com/database/disk/bytes_used
+      - metric_name: cloudsql.googleapis.com/database/disk/quota
+      - metric_name: cloudsql.googleapis.com/database/disk/read_ops_count
+      - metric_name: cloudsql.googleapis.com/database/disk/write_ops_count
+
+      # --- Network ---
+      - metric_name: cloudsql.googleapis.com/database/network/received_bytes_count
+      - metric_name: cloudsql.googleapis.com/database/network/sent_bytes_count
+      - metric_name: cloudsql.googleapis.com/database/network/connections
+
+      # --- Queries ---
+      - metric_name: cloudsql.googleapis.com/database/mysql/queries
+      - metric_name: cloudsql.googleapis.com/database/mysql/questions
+      - metric_name: cloudsql.googleapis.com/database/postgresql/num_backends
+      - metric_name: cloudsql.googleapis.com/database/postgresql/transaction_count
+
+      # --- Replication ---
+      - metric_name: cloudsql.googleapis.com/database/replication/replica_lag
+      - metric_name: cloudsql.googleapis.com/database/replication/state
+
+      # --- InnoDB (MySQL) ---
+      - metric_name: cloudsql.googleapis.com/database/mysql/innodb_buffer_pool_pages_dirty
+      - metric_name: cloudsql.googleapis.com/database/mysql/innodb_buffer_pool_pages_free
+      - metric_name: cloudsql.googleapis.com/database/mysql/innodb_buffer_pool_pages_total
+      - metric_name: cloudsql.googleapis.com/database/mysql/innodb_data_fsyncs
+      - metric_name: cloudsql.googleapis.com/database/mysql/innodb_pages_read
+      - metric_name: cloudsql.googleapis.com/database/mysql/innodb_pages_written
+
+      # --- PostgreSQL ---
+      - metric_name: cloudsql.googleapis.com/database/postgresql/deadlock_count
+      - metric_name: cloudsql.googleapis.com/database/postgresql/blocks_read_count
+      - metric_name: cloudsql.googleapis.com/database/postgresql/blocks_hit_count
+      - metric_name: cloudsql.googleapis.com/database/postgresql/vacuum/oldest_transaction_age
+
+      # --- Uptime ---
+      - metric_name: cloudsql.googleapis.com/database/uptime
+      - metric_name: cloudsql.googleapis.com/database/state
+
+      # --- Availability ---
+      - metric_name: cloudsql.googleapis.com/database/available_for_failover

@@ -1,0 +1,32 @@
+# Datadog Exporter
+# Exports traces, metrics, and logs to Datadog.
+# Supports APM traces, infrastructure metrics, and log forwarding.
+#
+# Required: Datadog API key from Organization Settings > API Keys.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=datadog.yaml
+exporters:
+  datadog:
+    api:
+      key: ${DD_API_KEY}
+      site: ${DD_SITE:-datadoghq.com}
+    # Host metadata tags
+    hostname: ${DD_HOSTNAME:-}
+    # Metrics configuration
+    metrics:
+      # Resource attributes as tags
+      resource_attributes_as_tags: true
+    # Traces configuration
+    traces:
+      # Trace buffer
+      trace_buffer: 500
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

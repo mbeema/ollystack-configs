@@ -1,0 +1,31 @@
+# Tencent Cloud Log Service Exporter
+# Exports logs to Tencent Cloud CLS (Cloud Log Service).
+# CLS provides real-time log collection, storage, search, and analysis.
+#
+# Supports: logs
+#
+# Required env vars:
+#   TENCENT_CLS_TOPIC_ID  - CLS topic ID
+#   TENCENT_SECRET_ID     - Tencent Cloud SecretId
+#   TENCENT_SECRET_KEY    - Tencent Cloud SecretKey
+#
+# Optional env vars:
+#   TENCENT_CLS_REGION    - CLS region (default: ap-guangzhou)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=tencentcloud.yaml
+exporters:
+  tencentcloud_logservice:
+    region: ${TENCENT_CLS_REGION:-ap-guangzhou}
+    topic_id: ${TENCENT_CLS_TOPIC_ID}
+    secret_id: ${TENCENT_SECRET_ID}
+    secret_key: ${TENCENT_SECRET_KEY}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

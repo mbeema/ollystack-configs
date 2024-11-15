@@ -1,0 +1,31 @@
+# Azure Blob Storage Exporter
+# Exports traces, metrics, and logs to Azure Blob Storage containers.
+# Useful for long-term archival, compliance storage, and data lake ingestion.
+#
+# Supports: traces, metrics, logs
+#
+# Required env vars:
+#   AZURE_STORAGE_CONNECTION_STRING - Azure Storage account connection string
+#
+# Optional env vars:
+#   AZURE_BLOB_CONTAINER - Container name (default: telemetry)
+#
+# Usage:
+#   otelcol --config=base.yaml --config=azureblobstorage.yaml
+exporters:
+  azureblob:
+    connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+    container: ${AZURE_BLOB_CONTAINER:-telemetry}
+    blob_prefix:
+      traces: ${AZURE_BLOB_TRACES_PREFIX:-traces}
+      metrics: ${AZURE_BLOB_METRICS_PREFIX:-metrics}
+      logs: ${AZURE_BLOB_LOGS_PREFIX:-logs}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000

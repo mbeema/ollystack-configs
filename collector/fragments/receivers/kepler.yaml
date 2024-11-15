@@ -1,0 +1,42 @@
+# Kepler Energy Metrics Receiver (via Prometheus scrape)
+# Scrapes metrics from Kepler (Kubernetes-based Efficient Power Level
+# Exporter), a CNCF Sandbox project that measures energy consumption
+# at container, pod, and node level using eBPF and hardware counters.
+#
+# Essential for: ESG/sustainability reporting, carbon footprint tracking,
+# energy cost optimization, and workload right-sizing by power consumption.
+#
+# Kepler uses eBPF probes on CPU performance counters, cgroup stats,
+# and RAPL/ACPI/NVML interfaces to estimate energy usage per workload.
+#
+# Install: helm install kepler kepler/kepler -n kepler --create-namespace
+# Metrics endpoint: port 9103 by default.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=kepler.yaml
+receivers:
+  prometheus/kepler:
+    config:
+      scrape_configs:
+        - job_name: kepler
+          scrape_interval: ${KEPLER_SCRAPE_INTERVAL:-30s}
+          metrics_path: /metrics
+          static_configs:
+            - targets: ${KEPLER_TARGETS:-["localhost:9103"]}
+              labels:
+                component: energy
+          # Kubernetes: discover Kepler DaemonSet pods
+          # kubernetes_sd_configs:
+          #   - role: pod
+          #     namespaces:
+          #       names: ["kepler"]
+          # relabel_configs:
+          #   - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          #     action: keep
+          #     regex: kepler
+          #   - source_labels: [__meta_kubernetes_pod_node_name]
+          #     target_label: node
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              action: keep
+              regex: "kepler_(container_joules_total|container_core_joules_total|container_dram_joules_total|container_gpu_joules_total|container_package_joules_total|container_uncore_joules_total|container_other_joules_total|node_package_joules_total|node_core_joules_total|node_dram_joules_total|node_gpu_joules_total|node_platform_joules_total|node_uncore_joules_total|node_other_joules_total|node_info|container_bpf_cpu_time_us_total|container_bpf_net_tx_irq_total|container_bpf_net_rx_irq_total|container_bpf_block_irq_total)"

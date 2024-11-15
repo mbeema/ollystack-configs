@@ -1,0 +1,43 @@
+# Service Graph Connector
+# Generates service dependency graph metrics from trace data.
+# Produces metrics describing relationships and latencies between services.
+
+connectors:
+  servicegraph:
+    # Latency histogram bucket boundaries for inter-service call durations
+    latency_histogram_buckets:
+      - 2ms
+      - 4ms
+      - 6ms
+      - 8ms
+      - 10ms
+      - 50ms
+      - 100ms
+      - 200ms
+      - 400ms
+      - 800ms
+      - 1s
+      - 5s
+      - 10s
+
+    # Span attributes to include as dimensions on generated metrics
+    dimensions:
+      - service.name
+      - http.method
+      - http.status_code
+      - rpc.method
+
+    # In-memory store configuration for correlating client/server span pairs
+    store:
+      # Time-to-live for incomplete edges awaiting a matching span
+      ttl: 2s
+      # Maximum number of items held in the store
+      max_items: 1000
+
+    # Optional: custom metric namespace prefix
+    # metrics_namespace: ""
+
+    # Optional: virtual node peer attributes used when a peer span is missing
+    # virtual_node_peer_attributes:
+    #   - db.name
+    #   - net.sock.peer.addr

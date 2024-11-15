@@ -1,0 +1,10 @@
+# Group by trace processor - buffers spans and groups them by trace ID.
+# Required before tail sampling to ensure all spans of a trace are available.
+processors:
+  groupbytrace:
+    # How long to wait for spans belonging to the same trace
+    wait_duration: 10s
+    # Maximum number of traces to hold in memory
+    num_traces: 100000
+    # Number of workers processing traces
+    num_workers: 2

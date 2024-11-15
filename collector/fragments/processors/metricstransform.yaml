@@ -1,0 +1,37 @@
+# Metrics Transform Processor
+# Renames metrics, labels, and label values. Aggregates across label sets.
+# Unlike the general transform processor (OTTL-based), this processor
+# provides a simpler declarative syntax for common metric transformations.
+#
+# Use cases:
+# - Rename metrics to match backend naming conventions
+# - Combine label values (e.g., collapse HTTP methods to GET/POST/OTHER)
+# - Aggregate metrics across labels to reduce cardinality
+# - Add/remove labels from specific metrics
+#
+# Usage:
+#   otelcol --config=base.yaml --config=metricstransform.yaml
+processors:
+  metricstransform:
+    transforms:
+      # Rename a metric
+      - include: system.cpu.time
+        action: update
+        new_name: cpu.time.total
+      # Add a static label to a metric
+      - include: ^system\\..*
+        match_type: regexp
+        action: update
+        operations:
+          - action: add_label
+            new_label: platform
+            new_value: ${PLATFORM:-kubernetes}
+      # Aggregate across a label (reduce cardinality)
+      # - include: http.server.request.duration
+      #   action: update
+      #   operations:
+      #     - action: aggregate_labels
+      #       aggregation_type: sum
+      #       label_set:
+      #         - http.method
+      #         - http.status_code

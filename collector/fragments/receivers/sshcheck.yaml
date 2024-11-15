@@ -1,0 +1,14 @@
+# SSH Check Receiver
+# Performs SSH connectivity checks and collects connection metrics.
+# Monitors SSH server availability, authentication success, and connection duration.
+#
+# Usage:
+#   otelcol --config=base.yaml --config=sshcheck.yaml
+receivers:
+  sshcheck:
+    targets:
+      - endpoint: ${SSH_TARGET:-localhost:22}
+        username: ${SSH_USERNAME:-}
+        password: ${SSH_PASSWORD:-}
+        # key_file: ${SSH_KEY_FILE:-}
+    collection_interval: ${SSH_CHECK_INTERVAL:-60s}

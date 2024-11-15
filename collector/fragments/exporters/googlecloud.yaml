@@ -1,0 +1,33 @@
+# Google Cloud Exporter
+# Exports traces to Cloud Trace and metrics to Cloud Monitoring.
+# Authenticates via Application Default Credentials or Workload Identity.
+
+exporters:
+  googlecloud:
+    # GCP project where telemetry is stored
+    project: ${GCP_PROJECT_ID}
+
+    # Cloud Trace settings
+    trace:
+      # Buffer and batch controls
+      attribute_mappings: []
+
+    # Cloud Monitoring settings
+    metric:
+      # Prefix added to all metric names in Cloud Monitoring
+      prefix: custom.googleapis.com/opentelemetry
+
+      # Controls how OTel resource attributes map to monitored resource labels
+      resource_filters: []
+
+    # Retry and queue settings for reliability
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000

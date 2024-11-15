@@ -1,0 +1,52 @@
+# Google Cloud Monitoring Receiver — Cloud Spanner
+# Pulls Cloud Spanner instance, database, and node metrics from Google Cloud Monitoring.
+# Covers CPU, storage, latency, transactions, and session management.
+#
+# Required IAM role: roles/monitoring.viewer
+#
+# Required environment variables:
+#   GCP_PROJECT_ID  - Google Cloud project ID
+#
+# Usage:
+#   otelcol --config=base.yaml --config=googlecloudmonitoring-spanner.yaml
+receivers:
+  googlecloudmonitoring/spanner:
+    project_id: ${GCP_PROJECT_ID}
+    collection_interval: ${GCP_MONITORING_INTERVAL:-60s}
+    metrics_list:
+      # --- Instance CPU ---
+      - metric_name: spanner.googleapis.com/instance/cpu/utilization
+      - metric_name: spanner.googleapis.com/instance/cpu/utilization_by_priority
+      - metric_name: spanner.googleapis.com/instance/cpu/utilization_by_operation_type
+
+      # --- Instance Node Count ---
+      - metric_name: spanner.googleapis.com/instance/node_count
+      - metric_name: spanner.googleapis.com/instance/processing_units
+
+      # --- Storage ---
+      - metric_name: spanner.googleapis.com/instance/storage/used_bytes
+      - metric_name: spanner.googleapis.com/instance/storage/limit_bytes
+      - metric_name: spanner.googleapis.com/instance/storage/utilization
+
+      # --- API Requests ---
+      - metric_name: spanner.googleapis.com/api/request_count
+      - metric_name: spanner.googleapis.com/api/request_latencies
+      - metric_name: spanner.googleapis.com/api/received_bytes_count
+      - metric_name: spanner.googleapis.com/api/sent_bytes_count
+
+      # --- Transactions ---
+      - metric_name: spanner.googleapis.com/transaction_count
+      - metric_name: spanner.googleapis.com/lock_stat/total/lock_wait_time
+      - metric_name: spanner.googleapis.com/transaction_stat/total/commit_attempt_count
+      - metric_name: spanner.googleapis.com/transaction_stat/total/commit_retry_count
+
+      # --- Sessions ---
+      - metric_name: spanner.googleapis.com/instance/session_count
+      - metric_name: spanner.googleapis.com/api/active_sessions_count
+
+      # --- Read/Write ---
+      - metric_name: spanner.googleapis.com/query_count
+      - metric_name: spanner.googleapis.com/row_deletion_count
+
+      # --- Leader ---
+      - metric_name: spanner.googleapis.com/instance/leader_percentage
