@@ -1,0 +1,481 @@
+{
+  "uid": "app-red-metrics",
+  "title": "Application RED Metrics",
+  "description": "Rate, Errors, and Duration metrics derived from OpenTelemetry spanmetrics connector",
+  "tags": ["opentelemetry", "RED", "application", "spanmetrics"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false
+      },
+      {
+        "name": "service_name",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(calls_total, service_name)",
+        "current": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "options": [],
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "allValue": ".*"
+      },
+      {
+        "name": "span_kind",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(calls_total{service_name=~\"$service_name\"}, span_kind)",
+        "current": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "options": [],
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Rate - Request Rate by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 15,
+            "gradientMode": "scheme",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max", "lastNotNull"],
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(calls_total{service_name=~\"$service_name\", span_kind=~\"$span_kind\"}[5m]))",
+          "legendFormat": "{{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Errors - Error Rate by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 30,
+            "gradientMode": "scheme",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max", "lastNotNull"],
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(calls_total{service_name=~\"$service_name\", span_kind=~\"$span_kind\", status_code=\"STATUS_CODE_ERROR\"}[5m]))",
+          "legendFormat": "{{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Errors - Error Rate Percentage by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never"
+          },
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "orange", "value": 0.05 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max", "lastNotNull"],
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(calls_total{service_name=~\"$service_name\", span_kind=~\"$span_kind\", status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(calls_total{service_name=~\"$service_name\", span_kind=~\"$span_kind\"}[5m]))",
+          "legendFormat": "{{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Duration - Latency P50 by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never"
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"],
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (service_name, le) (rate(duration_milliseconds_bucket{service_name=~\"$service_name\", span_kind=~\"$span_kind\"}[5m])))",
+          "legendFormat": "P50 - {{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Duration - Latency P95 by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never"
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"],
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(duration_milliseconds_bucket{service_name=~\"$service_name\", span_kind=~\"$span_kind\"}[5m])))",
+          "legendFormat": "P95 - {{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Duration - Latency P99 by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never"
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"],
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (service_name, le) (rate(duration_milliseconds_bucket{service_name=~\"$service_name\", span_kind=~\"$span_kind\"}[5m])))",
+          "legendFormat": "P99 - {{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Top 10 Slowest Endpoints (P95 Latency)",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "orange", "value": 500 }, { "color": "red", "value": 1000 }] } },
+              { "id": "displayName", "value": "P95 Latency (ms)" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "service_name" },
+            "properties": [
+              { "id": "displayName", "value": "Service" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "span_name" },
+            "properties": [
+              { "id": "displayName", "value": "Endpoint" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "P95 Latency (ms)", "desc": true }],
+        "footer": { "show": false }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [{ "field": "Value", "desc": true }]
+          }
+        },
+        {
+          "id": "limit",
+          "options": { "limitField": 10 }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.95, sum by (service_name, span_name, le) (rate(duration_milliseconds_bucket{service_name=~\"$service_name\", span_kind=~\"$span_kind\"}[5m]))))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Error Rate Heatmap by Service and Endpoint",
+      "type": "heatmap",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "calculate": true,
+        "calculation": {
+          "xBuckets": { "mode": "size", "value": "" },
+          "yBuckets": { "mode": "count", "value": "" }
+        },
+        "color": {
+          "mode": "scheme",
+          "scheme": "RdYlGn",
+          "reverse": true,
+          "fill": "dark-orange",
+          "exponent": 0.5
+        },
+        "cellGap": 1,
+        "filterValues": { "le": 1e-9 },
+        "tooltip": { "show": true, "yHistogram": false },
+        "legend": { "show": true },
+        "yAxis": {
+          "unit": "short",
+          "axisPlacement": "left"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(calls_total{service_name=~\"$service_name\", span_kind=~\"$span_kind\", status_code=\"STATUS_CODE_ERROR\"}[5m]))",
+          "legendFormat": "{{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Service Dependency Graph",
+      "type": "nodeGraph",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Service dependency graph showing inter-service call relationships. Requires traces/spanmetrics with client/server span kinds to populate edges.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "nodes": {
+          "mainStatUnit": "reqps",
+          "arcs": [
+            {
+              "field": "error_rate",
+              "color": "red"
+            },
+            {
+              "field": "success_rate",
+              "color": "green"
+            }
+          ]
+        },
+        "edges": {
+          "mainStatUnit": "reqps"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(calls_total{service_name=~\"$service_name\", span_kind=\"SPAN_KIND_SERVER\"}[5m]))",
+          "legendFormat": "{{service_name}}",
+          "refId": "nodes"
+        },
+        {
+          "expr": "sum by (service_name, peer_service) (rate(calls_total{service_name=~\"$service_name\", span_kind=\"SPAN_KIND_CLIENT\"}[5m]))",
+          "legendFormat": "{{service_name}} -> {{peer_service}}",
+          "refId": "edges"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}
