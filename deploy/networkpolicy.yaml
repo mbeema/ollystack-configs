@@ -1,0 +1,231 @@
+# ============================================================================
+# OllyStack NetworkPolicy — Collector Namespace Security
+# ============================================================================
+# Locks down the observability namespace:
+#   - Agents accept OTLP ingress from any namespace (apps send telemetry)
+#   - Gateway accepts OTLP ingress only from agents within the namespace
+#   - All collector pods can reach external backends (egress)
+#   - Denies all other inbound traffic by default
+#
+# Apply:
+#   kubectl apply -f deploy/networkpolicy.yaml
+#
+# Prerequisites:
+#   - A CNI plugin that supports NetworkPolicy (Calico, Cilium, etc.)
+#   - Note: GKE Autopilot, EKS with VPC CNI, and AKS with Azure CNI
+#     all support NetworkPolicy natively
+# ============================================================================
+
+# ── Default deny all ingress ─────────────────────────────────────────────────
+# Baseline: deny all inbound traffic to the namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/part-of: opentelemetry
+    app.kubernetes.io/managed-by: ollystack
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# ── Agent ingress — accept OTLP from any namespace ──────────────────────────
+# Applications in any namespace send telemetry to agents via hostPort or service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agent-ingress
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/part-of: opentelemetry
+    app.kubernetes.io/managed-by: ollystack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: otel-agent
+      app.kubernetes.io/component: agent
+  policyTypes:
+    - Ingress
+  ingress:
+    # OTLP gRPC from any pod in any namespace
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4317
+    # OTLP HTTP from any pod in any namespace
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4318
+    # Health check (for kubelet probes)
+    - ports:
+        - protocol: TCP
+          port: 13133
+    # Prometheus scraping (from monitoring namespace)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8888
+
+---
+# ── Gateway ingress — accept OTLP only from collectors ──────────────────────
+# Only agents and cluster-receiver (within the namespace) forward to gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-ingress
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/part-of: opentelemetry
+    app.kubernetes.io/managed-by: ollystack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: otel-gateway
+      app.kubernetes.io/component: gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    # OTLP from agent pods within the namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: agent
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+    # OTLP from cluster-receiver within the namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: cluster-receiver
+      ports:
+        - protocol: TCP
+          port: 4317
+    # Health check (for kubelet probes)
+    - ports:
+        - protocol: TCP
+          port: 13133
+    # Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8888
+
+---
+# ── Cluster receiver ingress — health + metrics only ────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cluster-receiver-ingress
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/part-of: opentelemetry
+    app.kubernetes.io/managed-by: ollystack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: otel-cluster-receiver
+      app.kubernetes.io/component: cluster-receiver
+  policyTypes:
+    - Ingress
+  ingress:
+    # Health check (for kubelet probes)
+    - ports:
+        - protocol: TCP
+          port: 13133
+    # Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8888
+
+---
+# ── Egress — allow collectors to reach backends and kube-apiserver ───────────
+# All collector pods need egress to:
+#   - External backends (Datadog, Grafana Cloud, etc.)
+#   - kube-apiserver (for k8sattributes, k8s_cluster, kubeletstats)
+#   - DNS (kube-dns/CoreDNS)
+#   - Gateway service (agents → gateway)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-collector-egress
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/part-of: opentelemetry
+    app.kubernetes.io/managed-by: ollystack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: opentelemetry
+  policyTypes:
+    - Egress
+  egress:
+    # DNS resolution (CoreDNS in kube-system)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # kube-apiserver (typically on port 443 or 6443)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # OTLP to gateway within namespace (agent → gateway)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-gateway
+      ports:
+        - protocol: TCP
+          port: 4317
+    # External backends — HTTPS (443) and common OTLP ports
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 8443
+    # Kubelet API (agents need this for kubeletstats)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 10250
