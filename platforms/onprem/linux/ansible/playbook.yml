@@ -1,0 +1,53 @@
+---
+# =============================================================================
+# OpenTelemetry Collector Deployment Playbook
+# =============================================================================
+# Deploys the OpenTelemetry Collector Contrib on Linux hosts.
+#
+# Usage:
+#   ansible-playbook -i inventory.ini playbook.yml
+#   ansible-playbook -i inventory.ini playbook.yml --tags agent
+#   ansible-playbook -i inventory.ini playbook.yml --tags gateway
+#   ansible-playbook -i inventory.ini playbook.yml -e otel_version=0.96.0
+# =============================================================================
+
+- name: Deploy OpenTelemetry Collector Agents
+  hosts: otel_agents
+  become: true
+  tags:
+    - agent
+
+  vars:
+    otel_version: "{{ otel_collector_version | default('0.96.0') }}"
+    otel_mode: agent
+    otel_config_template: "roles/otel-collector/templates/config.yaml.j2"
+    otel_environment: "{{ environment | default('production') }}"
+    otel_team: "{{ team | default('platform') }}"
+    otel_gateway_endpoint: "{{ gateway_endpoint | default('gateway.internal:4317') }}"
+    otel_memory_limit_mib: 400
+    otel_memory_spike_mib: 100
+    otel_memory_max_systemd: "512M"
+
+  roles:
+    - role: otel-collector
+
+- name: Deploy OpenTelemetry Collector Gateways
+  hosts: otel_gateways
+  become: true
+  tags:
+    - gateway
+
+  vars:
+    otel_version: "{{ otel_collector_version | default('0.96.0') }}"
+    otel_mode: gateway
+    otel_config_template: "roles/otel-collector/templates/config.yaml.j2"
+    otel_environment: "{{ environment | default('production') }}"
+    otel_team: "{{ team | default('platform') }}"
+    otel_backend_endpoint: "{{ backend_endpoint | default('backend.internal:4317') }}"
+    otel_memory_limit_mib: 2048
+    otel_memory_spike_mib: 512
+    otel_memory_max_systemd: "4G"
+    otel_sampling_rate: 10
+
+  roles:
+    - role: otel-collector

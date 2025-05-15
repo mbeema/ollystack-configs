@@ -1,0 +1,202 @@
+# --------------------------------------------------------------------------
+# DaemonSet for OpenTelemetry Collector Agent
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Runs one collector pod per node to gather host metrics, kubelet stats,
+# container logs, and receive OTLP from local applications.
+# --------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-agent
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: opentelemetry
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-agent
+      app.kubernetes.io/component: agent
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-agent
+        app.kubernetes.io/component: agent
+        app.kubernetes.io/part-of: opentelemetry
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: otel-collector
+      hostNetwork: false
+      dnsPolicy: ClusterFirst
+
+      # Tolerate common taints so agent runs on all nodes
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+
+      # Ensure the agent runs on Linux nodes
+      nodeSelector:
+        kubernetes.io/os: linux
+
+      containers:
+        - name: otel-agent
+          image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib}:${OTEL_COLLECTOR_VERSION:-0.96.0}
+          imagePullPolicy: IfNotPresent
+          command:
+            - "/otelcol-contrib"
+            - "--config=/etc/otelcol/config.yaml"
+
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              hostPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              hostPort: 4318
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+            - name: zpages
+              containerPort: 55679
+              protocol: TCP
+
+          env:
+            # Node name for kubeletstats and k8sattributes processor
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Configurable environment variables from ConfigMap
+            - name: OTEL_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-env-config
+                  key: OTEL_NAMESPACE
+                  optional: true
+            - name: K8S_CLUSTER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-env-config
+                  key: K8S_CLUSTER_NAME
+                  optional: true
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-env-config
+                  key: DEPLOYMENT_ENVIRONMENT
+                  optional: true
+            - name: OTEL_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-env-config
+                  key: OTEL_LOG_LEVEL
+                  optional: true
+            # Secrets (e.g., backend auth tokens)
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: otel-secrets
+                  key: OTEL_EXPORTER_OTLP_HEADERS
+                  optional: true
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # Liveness probe on the health_check extension
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness probe on the health_check extension
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+              readOnly: true
+            - name: hostfs
+              mountPath: /hostfs
+              readOnly: true
+              mountPropagation: HostToContainer
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+
+      volumes:
+        # Agent configuration from ConfigMap
+        - name: config
+          configMap:
+            name: otel-agent-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+
+        # Host filesystem for hostmetrics receiver
+        - name: hostfs
+          hostPath:
+            path: /
+            type: Directory
+
+        # Pod logs for filelog receiver
+        - name: varlog
+          hostPath:
+            path: /var/log
+            type: Directory
+
+        # Docker container logs (symlink targets)
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+            type: DirectoryOrCreate

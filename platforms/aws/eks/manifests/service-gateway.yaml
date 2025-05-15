@@ -1,0 +1,39 @@
+# Service for OTel Gateway on EKS
+# Exposes the gateway for agents and instrumented applications to send telemetry.
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: opentelemetry
+    platform: aws
+    service: eks
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: ${LB_TYPE:-internal}
+    service.beta.kubernetes.io/aws-load-balancer-scheme: ${LB_SCHEME:-internal}
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: ${GATEWAY_SERVICE_TYPE:-ClusterIP}
+  selector:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: metrics
+      port: 8888
+      targetPort: 8888
+      protocol: TCP
+    - name: healthcheck
+      port: 13133
+      targetPort: 13133
+      protocol: TCP

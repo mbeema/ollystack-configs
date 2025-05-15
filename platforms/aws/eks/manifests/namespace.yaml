@@ -1,0 +1,17 @@
+# Namespace for observability components on EKS
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: observability
+    app.kubernetes.io/part-of: opentelemetry
+    app.kubernetes.io/managed-by: kubectl
+    platform: aws
+    service: eks
+    environment: ${ENVIRONMENT:-production}
+    cluster: ${EKS_CLUSTER_NAME}
+    aws.region: ${AWS_REGION}
+  annotations:
+    description: "Observability namespace for OpenTelemetry components on EKS"
+    owner: ${TEAM_NAME:-platform-engineering}

@@ -1,0 +1,225 @@
+# Helm chart values for OpenTelemetry Collector Agent on Azure AKS
+# Chart: open-telemetry/opentelemetry-collector
+# Usage: helm install otel-agent open-telemetry/opentelemetry-collector -f helm-values-agent.yaml -n observability
+
+mode: daemonset
+
+nameOverride: otel-agent
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: ${OTEL_COLLECTOR_VERSION:-0.96.0}
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: otel-agent
+  annotations:
+    azure.workload.identity/client-id: ${AZURE_CLIENT_ID}
+
+podAnnotations:
+  azure.workload.identity/use: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"
+
+podLabels:
+  app.kubernetes.io/component: otel-agent
+  azure.workload.identity/use: "true"
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+    hostmetrics:
+      collection_interval: ${HOST_METRICS_INTERVAL:-15s}
+      scrapers:
+        cpu: {}
+        memory: {}
+        disk: {}
+        filesystem: {}
+        load: {}
+        network: {}
+    kubeletstats:
+      collection_interval: ${KUBELET_STATS_INTERVAL:-20s}
+      auth_type: serviceAccount
+      endpoint: "https://${env:K8S_NODE_NAME}:10250"
+      insecure_skip_verify: true
+      metric_groups:
+        - node
+        - pod
+        - container
+    filelog:
+      include:
+        - /var/log/pods/*/*/*.log
+      exclude:
+        - /var/log/pods/*/otc-container/*.log
+      start_at: end
+      include_file_path: true
+
+  processors:
+    batch:
+      send_batch_size: 512
+      timeout: 5s
+    memory_limiter:
+      check_interval: 5s
+      limit_mib: 512
+      spike_limit_mib: 128
+    k8sattributes:
+      auth_type: serviceAccount
+      passthrough: false
+      filter:
+        node_from_env_var: K8S_NODE_NAME
+      extract:
+        metadata:
+          - k8s.pod.name
+          - k8s.pod.uid
+          - k8s.deployment.name
+          - k8s.namespace.name
+          - k8s.node.name
+    resourcedetection:
+      detectors:
+        - azure
+        - aks
+        - env
+      timeout: 5s
+
+  exporters:
+    otlp:
+      endpoint: "${GATEWAY_ENDPOINT:-otel-gateway.observability.svc.cluster.local:4317}"
+      tls:
+        insecure: true
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+        exporters: [otlp]
+      metrics:
+        receivers: [otlp, hostmetrics, kubeletstats]
+        processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+        exporters: [otlp]
+      logs:
+        receivers: [otlp, filelog]
+        processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+        exporters: [otlp]
+
+env:
+  - name: K8S_NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+  - name: K8S_POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: K8S_POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: K8S_POD_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+  - name: AZURE_CLIENT_ID
+    value: ${AZURE_CLIENT_ID}
+  - name: AZURE_TENANT_ID
+    value: ${AZURE_TENANT_ID}
+  - name: AZURE_SUBSCRIPTION_ID
+    value: ${AZURE_SUBSCRIPTION_ID}
+  - name: GATEWAY_ENDPOINT
+    value: "otel-gateway.observability.svc.cluster.local:4317"
+
+resources:
+  limits:
+    cpu: ${AGENT_CPU_LIMIT:-500m}
+    memory: ${AGENT_MEMORY_LIMIT:-768Mi}
+  requests:
+    cpu: ${AGENT_CPU_REQUEST:-100m}
+    memory: ${AGENT_MEMORY_REQUEST:-256Mi}
+
+tolerations:
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "kubernetes.azure.com/scalesetpriority"
+    operator: "Equal"
+    value: "spot"
+    effect: "NoSchedule"
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 300
+  - key: "node.kubernetes.io/unreachable"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 300
+
+extraVolumes:
+  - name: varlogpods
+    hostPath:
+      path: /var/log/pods
+  - name: varlibdockercontainers
+    hostPath:
+      path: /var/lib/docker/containers
+
+extraVolumeMounts:
+  - name: varlogpods
+    mountPath: /var/log/pods
+    readOnly: true
+  - name: varlibdockercontainers
+    mountPath: /var/lib/docker/containers
+    readOnly: true
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    hostPort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    hostPort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods", "namespaces", "nodes", "nodes/stats", "nodes/proxy", "endpoints"]
+      verbs: ["get", "watch", "list"]
+    - apiGroups: ["apps"]
+      resources: ["replicasets", "deployments", "daemonsets", "statefulsets"]
+      verbs: ["get", "watch", "list"]
+    - apiGroups: ["batch"]
+      resources: ["jobs", "cronjobs"]
+      verbs: ["get", "watch", "list"]
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 15
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 10
+  periodSeconds: 5

@@ -1,0 +1,87 @@
+# Lambda OTel Collector Configuration
+# Minimal config optimized for Lambda cold start performance.
+# Runs as part of the OTel Lambda Layer extension.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: localhost:4317
+      http:
+        endpoint: localhost:4318
+
+processors:
+  batch:
+    send_batch_size: ${BATCH_SIZE:-64}
+    send_batch_max_size: ${BATCH_MAX_SIZE:-128}
+    timeout: ${BATCH_TIMEOUT:-1s}
+
+  memory_limiter:
+    check_interval: 3s
+    limit_mib: ${MEMORY_LIMITER_LIMIT_MIB:-128}
+    spike_limit_mib: ${MEMORY_LIMITER_SPIKE_MIB:-32}
+
+  resource:
+    attributes:
+      - key: cloud.provider
+        value: aws
+        action: upsert
+      - key: cloud.platform
+        value: aws_lambda
+        action: upsert
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-production}
+        action: upsert
+      - key: service.name
+        value: ${OTEL_SERVICE_NAME}
+        action: upsert
+
+exporters:
+  otlp:
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+    tls:
+      insecure: ${OTEL_EXPORTER_TLS_INSECURE:-false}
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 15s
+
+service:
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-warn}
+    metrics:
+      level: none
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp

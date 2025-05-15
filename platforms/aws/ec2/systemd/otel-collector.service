@@ -1,0 +1,56 @@
+[Unit]
+Description=OpenTelemetry Collector Contrib
+Documentation=https://opentelemetry.io/docs/collector/
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=otel
+Group=otel
+
+# Environment
+EnvironmentFile=-/etc/otel-collector/otel-collector.env
+
+# Execution
+ExecStart=/opt/otel-collector/otelcol-contrib --config=/etc/otel-collector/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+MemoryMax=${OTEL_MEMORY_MAX:-1G}
+MemoryHigh=${OTEL_MEMORY_HIGH:-768M}
+CPUQuota=${OTEL_CPU_QUOTA:-100%}
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+
+# Allow reading log files and journald
+ReadOnlyPaths=/var/log
+SupplementaryGroups=adm systemd-journal
+
+# Logging
+StandardOutput=append:/var/log/otel-collector/otel-collector.log
+StandardError=append:/var/log/otel-collector/otel-collector-error.log
+SyslogIdentifier=otel-collector
+
+# Watchdog
+WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target

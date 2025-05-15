@@ -1,0 +1,47 @@
+[Unit]
+Description=OpenTelemetry Collector Gateway
+Documentation=https://opentelemetry.io/docs/collector/
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=otel
+Group=otel
+
+# Environment configuration
+EnvironmentFile=/etc/otel-collector/env
+
+# Execution
+ExecStart=/opt/otel-collector/otelcol-contrib --config=/etc/otel-collector/gateway-config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=always
+RestartSec=5
+TimeoutStartSec=60
+TimeoutStopSec=60
+
+# Resource limits - higher for gateway role
+LimitNOFILE=65536
+LimitNPROC=8192
+MemoryMax=4G
+CPUQuota=200%
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log/otel-collector /var/lib/otel-collector
+ReadOnlyPaths=/etc/otel-collector
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=otel-collector-gateway
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+---
+# =============================================================================
+# OTel Collector Role - Handlers
+# =============================================================================
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart otel-collector
+  ansible.builtin.systemd:
+    name: "otel-collector-{{ otel_mode }}"
+    state: restarted
+    daemon_reload: true
+
+- name: Stop otel-collector
+  ansible.builtin.systemd:
+    name: "otel-collector-{{ otel_mode }}"
+    state: stopped

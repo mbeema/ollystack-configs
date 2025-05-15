@@ -1,0 +1,271 @@
+# --------------------------------------------------------------------------
+# Helm values for OpenTelemetry Collector Gateway (Deployment mode)
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Chart: open-telemetry/opentelemetry-collector
+# --------------------------------------------------------------------------
+
+# Run as Deployment with multiple replicas
+mode: deployment
+
+replicaCount: 2
+
+# Use the contrib distribution for full processor support
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: "${OTEL_COLLECTOR_VERSION:-0.96.0}"
+  pullPolicy: IfNotPresent
+
+fullnameOverride: otel-gateway
+
+# Service account with RBAC
+serviceAccount:
+  create: false
+  name: otel-collector
+
+# Resource limits - gateway needs more resources than agent
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+nodeSelector:
+  kubernetes.io/os: linux
+
+# Spread gateway pods across nodes and zones
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-gateway
+          topologyKey: kubernetes.io/hostname
+      - weight: 50
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-gateway
+          topologyKey: topology.kubernetes.io/zone
+
+# HPA configuration
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+# PDB
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Ports
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+    appProtocol: grpc
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+
+# Service type
+service:
+  type: ClusterIP
+
+# Probes
+livenessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 15
+  periodSeconds: 15
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+# Environment variables
+extraEnvs:
+  - name: K8S_POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: K8S_POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: BACKEND_OTLP_ENDPOINT
+    valueFrom:
+      configMapKeyRef:
+        name: otel-env-config
+        key: BACKEND_OTLP_ENDPOINT
+  - name: BACKEND_OTLP_AUTH_HEADER
+    valueFrom:
+      secretKeyRef:
+        name: otel-secrets
+        key: BACKEND_OTLP_AUTH_HEADER
+        optional: true
+
+# Security context
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+
+# Collector configuration
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+          max_recv_msg_size_mib: 16
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    memory_limiter:
+      check_interval: 5s
+      limit_mib: 2048
+      spike_limit_mib: 512
+
+    batch:
+      send_batch_size: 16384
+      send_batch_max_size: 32768
+      timeout: 10s
+
+    tail_sampling:
+      decision_wait: 10s
+      num_traces: 100000
+      expected_new_traces_per_sec: 1000
+      policies:
+        - name: errors-policy
+          type: status_code
+          status_code:
+            status_codes:
+              - ERROR
+        - name: latency-policy
+          type: latency
+          latency:
+            threshold_ms: 1000
+        - name: composite-policy
+          type: composite
+          composite:
+            max_total_spans_per_second: 5000
+            policy_order:
+              - errors-always
+              - high-latency-always
+              - probabilistic-sample
+            composite_sub_policy:
+              - name: errors-always
+                type: status_code
+                status_code:
+                  status_codes:
+                    - ERROR
+              - name: high-latency-always
+                type: latency
+                latency:
+                  threshold_ms: 1000
+              - name: probabilistic-sample
+                type: probabilistic
+                probabilistic:
+                  sampling_percentage: 10
+            rate_allocation:
+              - policy: errors-always
+                percent: 40
+              - policy: high-latency-always
+                percent: 30
+              - policy: probabilistic-sample
+                percent: 30
+
+    resource:
+      attributes:
+        - key: k8s.cluster.name
+          value: "${K8S_CLUSTER_NAME:-unknown}"
+          action: upsert
+        - key: deployment.environment
+          value: "${DEPLOYMENT_ENVIRONMENT:-production}"
+          action: upsert
+        - key: telemetry.gateway.name
+          value: otel-gateway
+          action: upsert
+
+  exporters:
+    otlp:
+      endpoint: "${BACKEND_OTLP_ENDPOINT}"
+      tls:
+        insecure: false
+      headers:
+        Authorization: "${BACKEND_OTLP_AUTH_HEADER:-}"
+      compression: gzip
+      sending_queue:
+        enabled: true
+        num_consumers: 10
+        queue_size: 10000
+      retry_on_failure:
+        enabled: true
+        initial_interval: 5s
+        max_interval: 60s
+        max_elapsed_time: 600s
+      timeout: 30s
+
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+    ballast:
+      size_mib: 683
+
+  service:
+    extensions: [health_check, ballast]
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, tail_sampling, resource, batch]
+        exporters: [otlp]
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlp]
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlp]
+    telemetry:
+      logs:
+        level: info
+      metrics:
+        address: 0.0.0.0:8888

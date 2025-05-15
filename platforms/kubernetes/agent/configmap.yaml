@@ -1,0 +1,257 @@
+# --------------------------------------------------------------------------
+# ConfigMap holding the OTel Collector agent configuration
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# The config content mirrors agent/otel-agent.yaml and is mounted into the
+# DaemonSet pod at /etc/otelcol/config.yaml
+# --------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-agent-config
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: opentelemetry
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+      hostmetrics:
+        collection_interval: ${HOSTMETRICS_INTERVAL:-30s}
+        root_path: /hostfs
+        scrapers:
+          cpu:
+            metrics:
+              system.cpu.utilization:
+                enabled: true
+          memory:
+            metrics:
+              system.memory.utilization:
+                enabled: true
+          disk: {}
+          filesystem:
+            exclude_mount_points:
+              mount_points:
+                - /dev/*
+                - /proc/*
+                - /sys/*
+                - /run/k3s/containerd/*
+              match_type: regexp
+          load: {}
+          network: {}
+          paging: {}
+          processes: {}
+
+      kubeletstats:
+        collection_interval: ${KUBELETSTATS_INTERVAL:-30s}
+        auth_type: serviceAccount
+        endpoint: "https://${env:K8S_NODE_NAME}:10250"
+        insecure_skip_verify: true
+        metric_groups:
+          - node
+          - pod
+          - container
+          - volume
+        extra_metadata_labels:
+          - container.id
+
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/*/otc-container/*.log
+        start_at: ${FILELOG_START_AT:-end}
+        include_file_path: true
+        include_file_name: false
+        operators:
+          - type: router
+            id: get-format
+            routes:
+              - output: parser-docker
+                expr: 'body matches "^\\{"'
+              - output: parser-crio
+                expr: 'body matches "^[^ Z]+ "'
+              - output: parser-containerd
+                expr: 'body matches "^[^ Z]+Z"'
+          - type: json_parser
+            id: parser-docker
+            output: extract-metadata-from-filepath
+            timestamp:
+              parse_from: attributes.time
+              layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+          - type: regex_parser
+            id: parser-crio
+            regex: '^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            output: extract-metadata-from-filepath
+            timestamp:
+              parse_from: attributes.time
+              layout: "%Y-%m-%dT%H:%M:%S.%L%j"
+          - type: regex_parser
+            id: parser-containerd
+            regex: '^(?P<time>[^ ^Z]+Z) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            output: extract-metadata-from-filepath
+            timestamp:
+              parse_from: attributes.time
+              layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+          - type: regex_parser
+            id: extract-metadata-from-filepath
+            regex: '^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]+)\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$'
+            parse_from: attributes["log.file.path"]
+            cache:
+              size: 128
+          - type: move
+            from: attributes.namespace
+            to: resource["k8s.namespace.name"]
+          - type: move
+            from: attributes.pod_name
+            to: resource["k8s.pod.name"]
+          - type: move
+            from: attributes.uid
+            to: resource["k8s.pod.uid"]
+          - type: move
+            from: attributes.container_name
+            to: resource["k8s.container.name"]
+          - type: move
+            from: attributes.restart_count
+            to: resource["k8s.container.restart_count"]
+          - type: move
+            from: attributes.log
+            to: body
+
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+
+      batch:
+        send_batch_size: ${AGENT_BATCH_SIZE:-8192}
+        send_batch_max_size: ${AGENT_BATCH_MAX_SIZE:-16384}
+        timeout: ${AGENT_BATCH_TIMEOUT:-5s}
+
+      k8sattributes:
+        auth_type: serviceAccount
+        passthrough: false
+        filter:
+          node_from_env_var: K8S_NODE_NAME
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.pod.start_time
+            - k8s.replicaset.name
+            - k8s.statefulset.name
+            - k8s.daemonset.name
+            - k8s.job.name
+            - k8s.cronjob.name
+            - k8s.container.name
+          labels:
+            - tag_name: app.label.component
+              key: app.kubernetes.io/component
+              from: pod
+            - tag_name: app.label.name
+              key: app.kubernetes.io/name
+              from: pod
+            - tag_name: app.label.instance
+              key: app.kubernetes.io/instance
+              from: pod
+            - tag_name: app.label.version
+              key: app.kubernetes.io/version
+              from: pod
+          annotations:
+            - tag_name: app.annotation.owner
+              key: owner
+              from: namespace
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.uid
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+          - sources:
+              - from: connection
+
+      resourcedetection:
+        detectors:
+          - system
+          - env
+        system:
+          hostname_sources:
+            - os
+          resource_attributes:
+            host.name:
+              enabled: true
+            host.id:
+              enabled: true
+            os.type:
+              enabled: true
+        timeout: 5s
+        override: false
+
+      resource:
+        attributes:
+          - key: k8s.cluster.name
+            value: ${K8S_CLUSTER_NAME:-unknown}
+            action: upsert
+          - key: deployment.environment
+            value: ${DEPLOYMENT_ENVIRONMENT:-production}
+            action: upsert
+
+    exporters:
+      otlp:
+        endpoint: otel-gateway.${OTEL_NAMESPACE:-observability}.svc.cluster.local:4317
+        tls:
+          insecure: ${OTEL_GATEWAY_INSECURE:-true}
+        sending_queue:
+          enabled: true
+          num_consumers: 4
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      pprof:
+        endpoint: 0.0.0.0:1777
+      zpages:
+        endpoint: 0.0.0.0:55679
+
+    service:
+      extensions:
+        - health_check
+        - pprof
+        - zpages
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resourcedetection, k8sattributes, resource, batch]
+          exporters: [otlp]
+        metrics:
+          receivers: [otlp, hostmetrics, kubeletstats]
+          processors: [memory_limiter, resourcedetection, k8sattributes, resource, batch]
+          exporters: [otlp]
+        logs:
+          receivers: [otlp, filelog]
+          processors: [memory_limiter, resourcedetection, k8sattributes, resource, batch]
+          exporters: [otlp]
+      telemetry:
+        logs:
+          level: ${OTEL_LOG_LEVEL:-info}
+        metrics:
+          address: 0.0.0.0:8888

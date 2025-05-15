@@ -1,0 +1,105 @@
+# --------------------------------------------------------------------------
+# OpenTelemetry Collector Cluster Receiver Configuration
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Collects cluster-level metrics and events. Runs as a single replica
+# to avoid duplicate data. Uses k8s_cluster and k8s_events receivers.
+# --------------------------------------------------------------------------
+
+receivers:
+  # Cluster-wide metrics (node conditions, pod phases, deployments, etc.)
+  k8s_cluster:
+    collection_interval: ${CLUSTER_METRICS_INTERVAL:-30s}
+    node_conditions_to_report:
+      - Ready
+      - MemoryPressure
+      - DiskPressure
+      - PIDPressure
+      - NetworkUnavailable
+    allocatable_types_to_report:
+      - cpu
+      - memory
+      - storage
+      - ephemeral-storage
+    metadata_collection_interval: 5m
+
+  # Kubernetes events as logs
+  k8s_events:
+    auth_type: serviceAccount
+    namespaces: []  # empty = all namespaces
+
+processors:
+  # Prevent out-of-memory situations
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # Batch before export
+  batch:
+    send_batch_size: 8192
+    timeout: 5s
+
+  # Add cluster-level resource attributes
+  resource:
+    attributes:
+      - key: k8s.cluster.name
+        value: ${K8S_CLUSTER_NAME:-unknown}
+        action: upsert
+      - key: deployment.environment
+        value: ${DEPLOYMENT_ENVIRONMENT:-production}
+        action: upsert
+      - key: telemetry.collector.role
+        value: cluster-receiver
+        action: upsert
+
+exporters:
+  # Export to the gateway
+  otlp:
+    endpoint: otel-gateway.${OTEL_NAMESPACE:-observability}.svc.cluster.local:4317
+    tls:
+      insecure: ${OTEL_GATEWAY_INSECURE:-true}
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions:
+    - health_check
+
+  pipelines:
+    metrics:
+      receivers:
+        - k8s_cluster
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - k8s_events
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+    metrics:
+      address: 0.0.0.0:8888

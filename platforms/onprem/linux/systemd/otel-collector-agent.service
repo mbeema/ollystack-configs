@@ -1,0 +1,51 @@
+[Unit]
+Description=OpenTelemetry Collector Agent
+Documentation=https://opentelemetry.io/docs/collector/
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=otel
+Group=otel
+
+# Environment configuration
+EnvironmentFile=/etc/otel-collector/env
+
+# Execution
+ExecStart=/opt/otel-collector/otelcol-contrib --config=/etc/otel-collector/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=always
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=512M
+CPUQuota=50%
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log/otel-collector /var/lib/otel-collector
+ReadOnlyPaths=/etc/otel-collector
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=otel-collector-agent
+
+# Capabilities for binding to privileged ports (e.g., syslog 514)
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

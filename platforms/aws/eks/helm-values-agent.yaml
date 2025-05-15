@@ -1,0 +1,163 @@
+# Helm Chart Values - EKS OTel Agent (DaemonSet)
+# Chart: open-telemetry/opentelemetry-collector
+# Usage: helm install otel-agent open-telemetry/opentelemetry-collector -f helm-values-agent.yaml -n observability
+
+mode: daemonset
+
+nameOverride: otel-agent
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: ${OTEL_COLLECTOR_VERSION:-0.98.0}
+  pullPolicy: IfNotPresent
+
+command:
+  name: otelcol-contrib
+
+config:
+  # Config is loaded from the external ConfigMap / otel-agent.yaml
+  # Override inline if needed, otherwise reference the file
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+resources:
+  limits:
+    cpu: ${AGENT_CPU_LIMIT:-500m}
+    memory: ${AGENT_MEMORY_LIMIT:-768Mi}
+  requests:
+    cpu: ${AGENT_CPU_REQUEST:-100m}
+    memory: ${AGENT_MEMORY_REQUEST:-256Mi}
+
+env:
+  - name: K8S_NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+  - name: K8S_POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: K8S_POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: K8S_POD_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+  - name: AWS_REGION
+    value: ${AWS_REGION}
+  - name: EKS_CLUSTER_NAME
+    value: ${EKS_CLUSTER_NAME}
+  - name: OTEL_GATEWAY_ENDPOINT
+    value: ${OTEL_GATEWAY_ENDPOINT:-otel-gateway.observability.svc.cluster.local:4317}
+  - name: OTEL_LOG_LEVEL
+    value: ${OTEL_LOG_LEVEL:-info}
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: "k8s.cluster.name=${EKS_CLUSTER_NAME},deployment.environment=${ENVIRONMENT:-production}"
+
+# Tolerate all taints so the agent runs on every node (including masters, GPU nodes, etc.)
+tolerations:
+  - operator: Exists
+    effect: NoSchedule
+  - operator: Exists
+    effect: NoExecute
+  - operator: Exists
+    effect: PreferNoSchedule
+
+# Use host network for better visibility into node-level metrics
+hostNetwork: false
+dnsPolicy: ClusterFirstWithHostNet
+
+# Security context
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+
+# Mount host volumes for log collection and host metrics
+extraVolumes:
+  - name: varlogpods
+    hostPath:
+      path: /var/log/pods
+  - name: varlibdockercontainers
+    hostPath:
+      path: /var/lib/docker/containers
+  - name: hostfs
+    hostPath:
+      path: /
+  - name: agent-config
+    configMap:
+      name: otel-agent-config
+
+extraVolumeMounts:
+  - name: varlogpods
+    mountPath: /var/log/pods
+    readOnly: true
+  - name: varlibdockercontainers
+    mountPath: /var/lib/docker/containers
+    readOnly: true
+  - name: hostfs
+    mountPath: /hostfs
+    readOnly: true
+    mountPropagation: HostToContainer
+  - name: agent-config
+    mountPath: /etc/otelcol-contrib/config.yaml
+    subPath: config.yaml
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    hostPort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    hostPort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+
+serviceAccount:
+  create: true
+  name: otel-agent
+  annotations:
+    eks.amazonaws.com/role-arn: ${OTEL_IAM_ROLE_ARN}
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"
+  prometheus.io/path: "/metrics"
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+
+priorityClassName: system-node-critical
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1

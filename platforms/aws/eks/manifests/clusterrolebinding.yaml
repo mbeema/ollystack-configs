@@ -1,0 +1,40 @@
+# ClusterRoleBinding for OTel Collector on EKS
+# Binds the otel-collector ClusterRole to both agent and gateway ServiceAccounts.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-agent
+  labels:
+    app.kubernetes.io/name: otel-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: opentelemetry
+    platform: aws
+    service: eks
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-agent
+    namespace: ${OTEL_NAMESPACE:-observability}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-gateway
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: opentelemetry
+    platform: aws
+    service: eks
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-gateway
+    namespace: ${OTEL_NAMESPACE:-observability}

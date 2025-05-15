@@ -1,0 +1,150 @@
+# Helm Chart Values - EKS OTel Gateway (Deployment)
+# Chart: open-telemetry/opentelemetry-collector
+# Usage: helm install otel-gateway open-telemetry/opentelemetry-collector -f helm-values-gateway.yaml -n observability
+
+mode: deployment
+
+nameOverride: otel-gateway
+
+replicaCount: ${GATEWAY_REPLICAS:-2}
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: ${OTEL_COLLECTOR_VERSION:-0.98.0}
+  pullPolicy: IfNotPresent
+
+command:
+  name: otelcol-contrib
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+resources:
+  limits:
+    cpu: ${GATEWAY_CPU_LIMIT:-2000m}
+    memory: ${GATEWAY_MEMORY_LIMIT:-4Gi}
+  requests:
+    cpu: ${GATEWAY_CPU_REQUEST:-500m}
+    memory: ${GATEWAY_MEMORY_REQUEST:-1Gi}
+
+env:
+  - name: AWS_REGION
+    value: ${AWS_REGION}
+  - name: EKS_CLUSTER_NAME
+    value: ${EKS_CLUSTER_NAME}
+  - name: OTEL_LOG_LEVEL
+    value: ${OTEL_LOG_LEVEL:-info}
+  - name: OTEL_BACKEND_ENDPOINT
+    value: ${OTEL_BACKEND_ENDPOINT:-tempo.observability.svc.cluster.local:4317}
+  - name: CW_LOG_GROUP
+    value: ${CW_LOG_GROUP:-/observability/${EKS_CLUSTER_NAME}/otel}
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: "k8s.cluster.name=${EKS_CLUSTER_NAME},deployment.environment=${ENVIRONMENT:-production}"
+
+# IRSA - IAM Roles for Service Accounts
+serviceAccount:
+  create: true
+  name: otel-gateway
+  annotations:
+    eks.amazonaws.com/role-arn: ${OTEL_IAM_ROLE_ARN}
+
+# Pod disruption budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Anti-affinity to spread gateway pods across nodes
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - otel-gateway
+          topologyKey: kubernetes.io/hostname
+
+# Topology spread constraints for AZ distribution
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: otel-gateway
+
+extraVolumes:
+  - name: gateway-config
+    configMap:
+      name: otel-gateway-config
+
+extraVolumeMounts:
+  - name: gateway-config
+    mountPath: /etc/otelcol-contrib/config.yaml
+    subPath: config.yaml
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"
+  prometheus.io/path: "/metrics"
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+
+autoscaling:
+  enabled: ${GATEWAY_AUTOSCALING_ENABLED:-true}
+  minReplicas: ${GATEWAY_MIN_REPLICAS:-2}
+  maxReplicas: ${GATEWAY_MAX_REPLICAS:-6}
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+service:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP

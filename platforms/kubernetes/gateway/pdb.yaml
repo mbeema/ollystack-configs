@@ -1,0 +1,22 @@
+# --------------------------------------------------------------------------
+# PodDisruptionBudget for OpenTelemetry Collector Gateway
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Ensures at least 1 gateway pod remains available during voluntary
+# disruptions (node drains, rolling updates, etc.).
+# --------------------------------------------------------------------------
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: opentelemetry
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-gateway
+      app.kubernetes.io/component: gateway

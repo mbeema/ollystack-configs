@@ -1,0 +1,190 @@
+# OpenTelemetry Collector Agent Configuration for Azure Windows VMs
+# Deployed via install-collector-windows.ps1 as a Windows service.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+  hostmetrics:
+    collection_interval: ${HOST_METRICS_INTERVAL:-15s}
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      disk: {}
+      filesystem: {}
+      load: {}
+      network: {}
+      paging: {}
+      processes: {}
+      process:
+        include:
+          match_type: regexp
+          names:
+            - ".*"
+        mute_process_name_error: true
+        mute_process_exe_error: true
+
+  filelog:
+    include:
+      - 'C:\inetpub\logs\LogFiles\**\*.log'
+      - 'C:\ProgramData\**\*.log'
+      - '${APP_LOG_PATH:-C:\app\logs\*.log}'
+    exclude:
+      - 'C:\ProgramData\Microsoft\**'
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: iis_log_parser
+        if: 'attributes["log.file.path"] matches "inetpub"'
+        regex: '^(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>\d{2}:\d{2}:\d{2})\s+(?P<s_ip>\S+)\s+(?P<cs_method>\S+)\s+(?P<cs_uri_stem>\S+)\s+(?P<cs_uri_query>\S+)\s+(?P<s_port>\d+)\s+(?P<cs_username>\S+)\s+(?P<c_ip>\S+)\s+(?P<cs_user_agent>\S+)\s+(?P<cs_referer>\S+)\s+(?P<sc_status>\d+)\s+(?P<sc_substatus>\d+)\s+(?P<sc_win32_status>\d+)\s+(?P<time_taken>\d+)'
+        timestamp:
+          parse_from: attributes.date
+          layout: "%Y-%m-%d"
+
+  windowseventlog:
+    channel: Application
+    max_reads: 100
+    start_at: end
+    poll_interval: ${WINDOWS_EVENT_POLL_INTERVAL:-1s}
+  windowseventlog/system:
+    channel: System
+    max_reads: 100
+    start_at: end
+    poll_interval: ${WINDOWS_EVENT_POLL_INTERVAL:-1s}
+  windowseventlog/security:
+    channel: Security
+    max_reads: 100
+    start_at: end
+    poll_interval: ${WINDOWS_EVENT_POLL_INTERVAL:-1s}
+
+processors:
+  resourcedetection:
+    detectors:
+      - azure
+      - env
+    timeout: 5s
+    override: false
+    azure:
+      resource_attributes:
+        cloud.provider:
+          enabled: true
+        cloud.platform:
+          enabled: true
+        cloud.region:
+          enabled: true
+        cloud.account.id:
+          enabled: true
+        host.id:
+          enabled: true
+        host.name:
+          enabled: true
+        azure.vm.name:
+          enabled: true
+        azure.vm.size:
+          enabled: true
+        azure.vm.scaleset.name:
+          enabled: true
+        azure.resourcegroup.name:
+          enabled: true
+
+  batch:
+    send_batch_size: ${BATCH_SIZE:-512}
+    timeout: ${BATCH_TIMEOUT:-5s}
+    send_batch_max_size: 1024
+
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMIT_MIB:-512}
+    spike_limit_mib: ${MEMORY_SPIKE_LIMIT_MIB:-128}
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-production}
+        action: upsert
+      - key: service.namespace
+        value: ${SERVICE_NAMESPACE:-azure-vm}
+        action: upsert
+      - key: service.name
+        value: ${SERVICE_NAME:-windows-vm-agent}
+        action: upsert
+
+exporters:
+  otlp:
+    endpoint: "${OTLP_ENDPOINT}"
+    tls:
+      insecure: ${OTLP_TLS_INSECURE:-false}
+      cert_file: ${OTLP_TLS_CERT:-}
+      key_file: ${OTLP_TLS_KEY:-}
+    headers:
+      Authorization: "Bearer ${OTLP_AUTH_TOKEN:-}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+    metrics:
+      receivers:
+        - otlp
+        - hostmetrics
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+    logs:
+      receivers:
+        - otlp
+        - filelog
+        - windowseventlog
+        - windowseventlog/system
+        - windowseventlog/security
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+    metrics:
+      address: "0.0.0.0:8888"

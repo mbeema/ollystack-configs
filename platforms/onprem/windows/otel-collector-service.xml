@@ -1,0 +1,82 @@
+<!--
+  =============================================================================
+  OpenTelemetry Collector - WinSW Service Wrapper Configuration
+  =============================================================================
+  Windows Service Wrapper (WinSW) configuration for running the
+  OpenTelemetry Collector as a Windows service.
+
+  WinSW: https://github.com/winsw/winsw
+
+  Usage:
+    1. Download WinSW from https://github.com/winsw/winsw/releases
+    2. Rename winsw.exe to otel-collector-service.exe
+    3. Place this XML alongside otel-collector-service.exe
+    4. Run: otel-collector-service.exe install
+    5. Run: otel-collector-service.exe start
+
+  Environment variables can be set in the <env> section below
+  or via system environment variables.
+  =============================================================================
+-->
+<service>
+  <!-- Service identification -->
+  <id>otel-collector</id>
+  <name>OpenTelemetry Collector</name>
+  <description>OpenTelemetry Collector Contrib - Collects, processes, and exports telemetry data (traces, metrics, logs).</description>
+
+  <!-- Executable configuration -->
+  <executable>C:\Program Files\otel-collector\otelcol-contrib.exe</executable>
+  <arguments>--config="C:\ProgramData\otel-collector\config\config.yaml"</arguments>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+
+  <!-- Working directory -->
+  <workingdirectory>C:\Program Files\otel-collector</workingdirectory>
+
+  <!-- Logging configuration -->
+  <log mode="roll-by-size">
+    <logpath>C:\ProgramData\otel-collector\logs</logpath>
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+
+  <!-- Service recovery / restart on failure -->
+  <onfailure action="restart" delay="5 sec"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 day</resetfailure>
+
+  <!-- Stop signal and timeout -->
+  <stoptimeout>30 sec</stoptimeout>
+  <stopparentprocessfirst>false</stopparentprocessfirst>
+
+  <!-- Environment variables -->
+  <env name="ENVIRONMENT" value="${ENVIRONMENT}"/>
+  <env name="TEAM" value="${TEAM}"/>
+  <env name="NODE_NAME" value="%COMPUTERNAME%"/>
+  <env name="GATEWAY_ENDPOINT" value="${GATEWAY_ENDPOINT}"/>
+  <env name="OTLP_GRPC_PORT" value="${OTLP_GRPC_PORT:-4317}"/>
+  <env name="OTLP_HTTP_PORT" value="${OTLP_HTTP_PORT:-4318}"/>
+  <env name="MEMORY_LIMIT_MIB" value="${MEMORY_LIMIT_MIB:-400}"/>
+  <env name="MEMORY_SPIKE_MIB" value="${MEMORY_SPIKE_MIB:-100}"/>
+  <env name="OTLP_INSECURE" value="${OTLP_INSECURE:-true}"/>
+
+  <!-- Service account (runs as LocalSystem by default) -->
+  <!-- Uncomment to run as a specific user:
+  <serviceaccount>
+    <username>.\otel-service</username>
+    <password>YOUR_PASSWORD_HERE</password>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  -->
+
+  <!-- Service dependencies -->
+  <depend>Tcpip</depend>
+  <depend>Dnscache</depend>
+
+  <!-- Priority -->
+  <priority>Normal</priority>
+
+  <!-- Security descriptor (restrict who can manage the service) -->
+  <!-- <securityDescriptor></securityDescriptor> -->
+</service>

@@ -1,0 +1,240 @@
+# OpenTelemetry Collector Agent Configuration for GCE (Compute Engine) VMs
+# Runs as a systemd service on each VM instance
+# Authenticates via attached GCP service account
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:${OTLP_GRPC_PORT}"
+      http:
+        endpoint: "0.0.0.0:${OTLP_HTTP_PORT}"
+
+  hostmetrics:
+    collection_interval: ${HOST_METRICS_INTERVAL}
+    root_path: /
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      disk:
+        metrics:
+          system.disk.io:
+            enabled: true
+          system.disk.operations:
+            enabled: true
+      filesystem:
+        metrics:
+          system.filesystem.utilization:
+            enabled: true
+        exclude_mount_points:
+          mount_points:
+            - /dev/*
+            - /proc/*
+            - /sys/*
+            - /run/*
+            - /snap/*
+          match_type: regexp
+        exclude_fs_types:
+          fs_types:
+            - autofs
+            - binfmt_misc
+            - bpf
+            - cgroup2
+            - configfs
+            - debugfs
+            - devpts
+            - devtmpfs
+            - fusectl
+            - hugetlbfs
+            - mqueue
+            - nsfs
+            - overlay
+            - proc
+            - procfs
+            - pstore
+            - rpc_pipefs
+            - securityfs
+            - selinuxfs
+            - squashfs
+            - sysfs
+            - tracefs
+            - tmpfs
+          match_type: strict
+      load:
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      network:
+        exclude:
+          interfaces:
+            - "lo"
+          match_type: strict
+      paging:
+      processes:
+      process:
+        include:
+          match_type: regexp
+          names:
+            - ".*"
+        mute_process_name_error: true
+
+  filelog:
+    include:
+      - /var/log/syslog
+      - /var/log/auth.log
+      - /var/log/messages
+      - ${APP_LOG_PATH}
+    exclude:
+      - /var/log/otel-collector.log
+    start_at: ${FILELOG_START_AT}
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: syslog-parser
+        if: 'resource["log.file.name"] matches "^(syslog|messages)$"'
+        regex: '^(?P<time>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<hostname>[^\s]+)\s+(?P<process>[^\[:\s]+)(?:\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.time
+          layout: "%b %e %H:%M:%S"
+      - type: move
+        from: attributes.message
+        to: body
+        if: 'attributes.message != nil'
+
+  journald:
+    directory: /var/log/journal
+    units:
+      - sshd
+      - systemd
+      - docker
+      - containerd
+      - kubelet
+      - ${APP_SYSTEMD_UNIT}
+    priority: info
+    all: false
+
+processors:
+  resourcedetection:
+    detectors:
+      - env
+      - gcp
+    timeout: 5s
+    override: false
+
+  resource:
+    attributes:
+      - key: cloud.provider
+        value: gcp
+        action: upsert
+      - key: deployment.environment
+        value: "${ENVIRONMENT}"
+        action: upsert
+      - key: service.name
+        value: "${SERVICE_NAME}"
+        action: upsert
+      - key: service.version
+        value: "${SERVICE_VERSION}"
+        action: upsert
+
+  batch:
+    send_batch_size: ${BATCH_SIZE}
+    send_batch_max_size: ${BATCH_MAX_SIZE}
+    timeout: ${BATCH_TIMEOUT}
+
+  memory_limiter:
+    check_interval: ${MEMORY_LIMITER_CHECK_INTERVAL}
+    limit_mib: ${MEMORY_LIMITER_LIMIT_MIB}
+    spike_limit_mib: ${MEMORY_LIMITER_SPIKE_MIB}
+
+exporters:
+  googlecloud:
+    project: "${GCP_PROJECT_ID}"
+    log:
+      default_log_name: "${GCP_LOG_NAME}"
+    trace:
+      endpoint: cloudtrace.googleapis.com:443
+    metric:
+      endpoint: monitoring.googleapis.com:443
+      prefix: "${GCP_METRIC_PREFIX}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 2000
+
+  otlp:
+    endpoint: "${GATEWAY_ENDPOINT}"
+    tls:
+      insecure: ${GATEWAY_TLS_INSECURE}
+    headers:
+      x-instance-name: "${INSTANCE_NAME}"
+      x-environment: "${ENVIRONMENT}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 2000
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:${HEALTH_CHECK_PORT}"
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+        - otlp
+    metrics:
+      receivers:
+        - otlp
+        - hostmetrics
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+        - otlp
+    logs:
+      receivers:
+        - otlp
+        - filelog
+        - journald
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+        - otlp
+  telemetry:
+    logs:
+      level: "${OTEL_LOG_LEVEL}"
+      output_paths:
+        - /var/log/otel-collector.log
+    metrics:
+      address: "0.0.0.0:${TELEMETRY_METRICS_PORT}"

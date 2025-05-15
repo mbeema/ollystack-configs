@@ -1,0 +1,109 @@
+# ECS OTel Agent Sidecar Configuration
+# Runs as a sidecar container alongside the application container in an ECS task.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  awsecscontainermetrics:
+    collection_interval: ${ECS_METRICS_INTERVAL:-20s}
+    # Automatically collects CPU, memory, network, and storage metrics
+    # from all containers in the ECS task via the task metadata endpoint.
+
+processors:
+  batch:
+    send_batch_size: ${BATCH_SIZE:-256}
+    send_batch_max_size: ${BATCH_MAX_SIZE:-512}
+    timeout: ${BATCH_TIMEOUT:-5s}
+
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMITER_LIMIT_MIB:-256}
+    spike_limit_mib: ${MEMORY_LIMITER_SPIKE_MIB:-64}
+
+  resourcedetection:
+    detectors:
+      - env
+      - ecs
+    timeout: 5s
+    override: false
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-production}
+        action: upsert
+      - key: service.name
+        value: ${OTEL_SERVICE_NAME}
+        action: upsert
+      - key: service.version
+        value: ${SERVICE_VERSION:-unknown}
+        action: upsert
+
+exporters:
+  otlp:
+    endpoint: ${OTEL_GATEWAY_ENDPOINT}
+    tls:
+      insecure: ${OTEL_EXPORTER_TLS_INSECURE:-false}
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 128
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+    metrics:
+      address: 0.0.0.0:8888
+
+  extensions:
+    - health_check
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+        - awsecscontainermetrics
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133

@@ -1,0 +1,88 @@
+# --------------------------------------------------------------------------
+# Instrumentation CR - Node.js Auto-Instrumentation
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Configures the OpenTelemetry Operator to automatically inject the Node.js
+# instrumentation into annotated pods. Add the annotation to your pod spec:
+#   instrumentation.opentelemetry.io/inject-nodejs: "true"
+# --------------------------------------------------------------------------
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: otel-instrumentation-nodejs
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-instrumentation-nodejs
+    app.kubernetes.io/component: instrumentation
+    app.kubernetes.io/part-of: opentelemetry
+spec:
+  # OTLP exporter endpoint - points to the agent DaemonSet on the same node
+  exporter:
+    endpoint: http://otel-agent.${OTEL_NAMESPACE:-observability}.svc.cluster.local:4317
+
+  # Propagation formats
+  propagators:
+    - tracecontext
+    - baggage
+    - b3
+    - b3multi
+
+  # Sampler configuration
+  sampler:
+    type: parentbased_traceidratio
+    argument: "${INSTRUMENTATION_SAMPLER_RATIO:-1.0}"
+
+  # Resource attributes applied to all telemetry
+  resource:
+    resourceAttributes:
+      deployment.environment:
+        value: ${DEPLOYMENT_ENVIRONMENT:-production}
+      k8s.cluster.name:
+        value: ${K8S_CLUSTER_NAME:-unknown}
+
+  # Node.js-specific configuration
+  nodejs:
+    image: ${OTEL_NODEJS_AGENT_IMAGE:-ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-nodejs}:${OTEL_NODEJS_AGENT_VERSION:-0.46.0}
+
+    env:
+      # Configure exporters
+      - name: OTEL_TRACES_EXPORTER
+        value: "otlp"
+
+      - name: OTEL_METRICS_EXPORTER
+        value: "otlp"
+
+      - name: OTEL_LOGS_EXPORTER
+        value: "otlp"
+
+      # Resource attributes
+      - name: OTEL_RESOURCE_ATTRIBUTES
+        value: "service.namespace=${SERVICE_NAMESPACE:-default}"
+
+      # Node.js-specific settings
+      - name: OTEL_NODE_RESOURCE_DETECTORS
+        value: "env,host,os,process,container"
+
+      # Enable experimental features for ESM support
+      - name: OTEL_NODE_ENABLED_INSTRUMENTATIONS
+        value: "${OTEL_NODE_ENABLED_INSTRUMENTATIONS:-}"
+
+      # Disabled instrumentations (comma-separated list)
+      - name: OTEL_NODE_DISABLED_INSTRUMENTATIONS
+        value: "${OTEL_NODE_DISABLED_INSTRUMENTATIONS:-fs}"
+
+      # Metric export interval
+      - name: OTEL_METRIC_EXPORT_INTERVAL
+        value: "${OTEL_METRIC_EXPORT_INTERVAL:-60000}"
+
+      # Log level for the SDK
+      - name: OTEL_LOG_LEVEL
+        value: "${OTEL_NODEJS_LOG_LEVEL:-info}"
+
+    resources:
+      limits:
+        cpu: 500m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi

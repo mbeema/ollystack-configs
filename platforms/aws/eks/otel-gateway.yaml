@@ -1,0 +1,167 @@
+# EKS OTel Gateway Configuration (Deployment)
+# Centralized gateway that receives telemetry from agents, applies sampling,
+# and exports to AWS X-Ray, CloudWatch Logs, and downstream OTLP endpoints.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: ${BATCH_SIZE:-1024}
+    send_batch_max_size: ${BATCH_MAX_SIZE:-2048}
+    timeout: ${BATCH_TIMEOUT:-10s}
+
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMITER_LIMIT_MIB:-2048}
+    spike_limit_mib: ${MEMORY_LIMITER_SPIKE_MIB:-512}
+
+  tail_sampling:
+    decision_wait: ${TAIL_SAMPLING_WAIT:-10s}
+    num_traces: ${TAIL_SAMPLING_NUM_TRACES:-50000}
+    expected_new_traces_per_sec: ${TAIL_SAMPLING_EXPECTED_RATE:-1000}
+    policies:
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+      - name: high-latency-policy
+        type: latency
+        latency:
+          threshold_ms: ${TAIL_SAMPLING_LATENCY_THRESHOLD:-1000}
+      - name: composite-policy
+        type: composite
+        composite:
+          max_total_spans_per_second: ${TAIL_SAMPLING_MAX_SPANS:-5000}
+          policy_order:
+            - errors-always
+            - high-latency-always
+            - percentage-sampling
+          composite_sub_policy:
+            - name: errors-always
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+            - name: high-latency-always
+              type: latency
+              latency:
+                threshold_ms: ${TAIL_SAMPLING_LATENCY_THRESHOLD:-1000}
+            - name: percentage-sampling
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: ${TAIL_SAMPLING_PERCENTAGE:-10}
+          rate_allocation:
+            - policy: errors-always
+              percent: 40
+            - policy: high-latency-always
+              percent: 30
+            - policy: percentage-sampling
+              percent: 30
+
+  resourcedetection:
+    detectors:
+      - ec2
+      - eks
+      - env
+    timeout: 5s
+    override: false
+    ec2:
+      tags:
+        - ^Name$
+        - ^Environment$
+        - ^Team$
+    eks:
+      resource_attributes:
+        k8s.cluster.name:
+          enabled: true
+
+exporters:
+  awsxray:
+    region: ${AWS_REGION}
+    index_all_attributes: true
+    indexed_attributes:
+      - otel.resource.service.name
+      - otel.resource.deployment.environment
+    resource_arn: ${AWS_RESOURCE_ARN:-}
+    role_arn: ${OTEL_IAM_ROLE_ARN:-}
+
+  awscloudwatchlogs:
+    region: ${AWS_REGION}
+    log_group_name: ${CW_LOG_GROUP:-/observability/${EKS_CLUSTER_NAME}/otel}
+    log_stream_name: ${CW_LOG_STREAM:-otel-gateway}
+    log_retention: ${CW_LOG_RETENTION:-30}
+    raw_log: false
+    endpoint: ${CW_ENDPOINT:-}
+
+  otlp:
+    endpoint: ${OTEL_BACKEND_ENDPOINT:-tempo.observability.svc.cluster.local:4317}
+    tls:
+      insecure: ${OTEL_EXPORTER_TLS_INSECURE:-true}
+    sending_queue:
+      enabled: true
+      num_consumers: 8
+      queue_size: 512
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+    metrics:
+      address: 0.0.0.0:8888
+
+  extensions:
+    - health_check
+    - zpages
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - resourcedetection
+        - batch
+      exporters:
+        - awsxray
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - awscloudwatchlogs
+        - otlp
+
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+    zpages:
+      endpoint: 0.0.0.0:55679

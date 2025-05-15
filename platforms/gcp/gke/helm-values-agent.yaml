@@ -1,0 +1,206 @@
+# Helm chart values for OpenTelemetry Collector Agent on GKE
+# Chart: open-telemetry/opentelemetry-collector
+# Mode: DaemonSet (one agent per node)
+
+mode: daemonset
+
+nameOverride: "otel-agent"
+fullnameOverride: "otel-agent"
+
+image:
+  repository: "otel/opentelemetry-collector-contrib"
+  tag: "${OTEL_COLLECTOR_VERSION}"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: "${OTEL_AGENT_SERVICE_ACCOUNT}"
+  annotations:
+    iam.gke.io/gcp-service-account: "${GCP_SERVICE_ACCOUNT_EMAIL}"
+
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources:
+        - nodes
+        - nodes/proxy
+        - nodes/metrics
+        - services
+        - endpoints
+        - pods
+        - events
+        - namespaces
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["apps"]
+      resources:
+        - replicasets
+        - deployments
+        - daemonsets
+        - statefulsets
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["batch"]
+      resources:
+        - jobs
+        - cronjobs
+      verbs: ["get", "list", "watch"]
+    - nonResourceURLs:
+        - /metrics
+      verbs: ["get"]
+
+extraEnvs:
+  - name: K8S_NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+  - name: K8S_POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: K8S_POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: K8S_POD_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+  - name: GCP_PROJECT_ID
+    value: "${GCP_PROJECT_ID}"
+  - name: CLUSTER_NAME
+    value: "${CLUSTER_NAME}"
+  - name: ENVIRONMENT
+    value: "${ENVIRONMENT}"
+  - name: OTLP_GRPC_PORT
+    value: "${OTLP_GRPC_PORT}"
+  - name: OTLP_HTTP_PORT
+    value: "${OTLP_HTTP_PORT}"
+  - name: HOST_METRICS_INTERVAL
+    value: "${HOST_METRICS_INTERVAL}"
+  - name: KUBELET_STATS_INTERVAL
+    value: "${KUBELET_STATS_INTERVAL}"
+  - name: FILELOG_START_AT
+    value: "${FILELOG_START_AT}"
+  - name: BATCH_SIZE
+    value: "${BATCH_SIZE}"
+  - name: BATCH_MAX_SIZE
+    value: "${BATCH_MAX_SIZE}"
+  - name: BATCH_TIMEOUT
+    value: "${BATCH_TIMEOUT}"
+  - name: MEMORY_LIMITER_CHECK_INTERVAL
+    value: "${MEMORY_LIMITER_CHECK_INTERVAL}"
+  - name: MEMORY_LIMITER_LIMIT_MIB
+    value: "${MEMORY_LIMITER_LIMIT_MIB}"
+  - name: MEMORY_LIMITER_SPIKE_MIB
+    value: "${MEMORY_LIMITER_SPIKE_MIB}"
+  - name: GATEWAY_ENDPOINT
+    value: "${GATEWAY_ENDPOINT}"
+  - name: GATEWAY_TLS_INSECURE
+    value: "${GATEWAY_TLS_INSECURE}"
+  - name: HEALTH_CHECK_PORT
+    value: "${HEALTH_CHECK_PORT}"
+  - name: ZPAGES_PORT
+    value: "${ZPAGES_PORT}"
+  - name: OTEL_LOG_LEVEL
+    value: "${OTEL_LOG_LEVEL}"
+  - name: TELEMETRY_METRICS_PORT
+    value: "${TELEMETRY_METRICS_PORT}"
+
+config:
+  # Config is loaded from otel-agent.yaml via ConfigMap
+  # Override inline config if needed
+  receivers: null
+  processors: null
+  exporters: null
+  service: null
+
+# Mount the custom config
+configMap:
+  create: false
+  existingName: "otel-agent-config"
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    hostPort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    hostPort: 4318
+    protocol: TCP
+  health:
+    enabled: true
+    containerPort: 13133
+    servicePort: 13133
+    protocol: TCP
+
+resources:
+  limits:
+    cpu: "${AGENT_CPU_LIMIT}"
+    memory: "${AGENT_MEMORY_LIMIT}"
+  requests:
+    cpu: "${AGENT_CPU_REQUEST}"
+    memory: "${AGENT_MEMORY_REQUEST}"
+
+# Volume mounts for log collection and host metrics
+extraVolumes:
+  - name: varlogpods
+    hostPath:
+      path: /var/log/pods
+  - name: varlogcontainers
+    hostPath:
+      path: /var/log/containers
+  - name: hostfs
+    hostPath:
+      path: /
+
+extraVolumeMounts:
+  - name: varlogpods
+    mountPath: /var/log/pods
+    readOnly: true
+  - name: varlogcontainers
+    mountPath: /var/log/containers
+    readOnly: true
+  - name: hostfs
+    mountPath: /hostfs
+    readOnly: true
+    mountPropagation: HostToContainer
+
+tolerations:
+  - operator: Exists
+
+nodeSelector: {}
+
+affinity: {}
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "${TELEMETRY_METRICS_PORT}"
+
+podLabels:
+  app.kubernetes.io/component: otel-agent
+  app.kubernetes.io/part-of: observability
+
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 15
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+priorityClassName: "system-node-critical"

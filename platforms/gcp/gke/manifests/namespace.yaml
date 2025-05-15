@@ -1,0 +1,12 @@
+# Namespace for OpenTelemetry Collector components on GKE
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${OTEL_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: opentelemetry
+    app.kubernetes.io/part-of: observability
+    app.kubernetes.io/managed-by: kubectl
+    environment: "${ENVIRONMENT}"
+  annotations:
+    purpose: "OpenTelemetry collector infrastructure for observability"

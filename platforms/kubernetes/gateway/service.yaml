@@ -1,0 +1,36 @@
+# --------------------------------------------------------------------------
+# Service for OpenTelemetry Collector Gateway
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# ClusterIP service exposing gRPC (4317), HTTP (4318), and health (13133)
+# endpoints. Agents connect to this service to forward telemetry.
+# --------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: opentelemetry
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+      appProtocol: grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+      appProtocol: http
+    - name: health
+      port: 13133
+      targetPort: 13133
+      protocol: TCP

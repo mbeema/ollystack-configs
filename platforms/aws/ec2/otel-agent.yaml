@@ -1,0 +1,201 @@
+# EC2 Host OTel Agent Configuration
+# Installed directly on EC2 instances to collect host-level telemetry.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  hostmetrics:
+    collection_interval: ${HOSTMETRICS_INTERVAL:-15s}
+    root_path: /
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      disk: {}
+      filesystem:
+        exclude_mount_points:
+          mount_points:
+            - /dev/*
+            - /proc/*
+            - /sys/*
+            - /run/*
+            - /snap/*
+          match_type: regexp
+      load: {}
+      network:
+        exclude:
+          interfaces:
+            - lo
+          match_type: strict
+      paging: {}
+      processes: {}
+      process:
+        include:
+          match_type: regexp
+          names:
+            - .*
+        mute_process_name_error: true
+        mute_process_exe_error: true
+        mute_process_io_error: true
+
+  filelog:
+    include:
+      - /var/log/syslog
+      - /var/log/messages
+      - /var/log/auth.log
+      - /var/log/secure
+      - /var/log/cloud-init.log
+      - /var/log/cloud-init-output.log
+    exclude:
+      - /var/log/otel-collector.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: syslog-parser
+        regex: '^(?P<time>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<hostname>\S+)\s+(?P<process>\S+?)(?:\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+        on_error: send
+        timestamp:
+          parse_from: attributes.time
+          layout: "%b %e %H:%M:%S"
+        severity:
+          parse_from: attributes.message
+          mapping:
+            error:
+              - error
+              - err
+              - crit
+              - alert
+              - emerg
+            warn:
+              - warn
+              - warning
+            info:
+              - info
+              - notice
+            debug:
+              - debug
+
+  journald:
+    directory: /var/log/journal
+    units:
+      - sshd
+      - systemd
+      - docker
+      - kubelet
+      - amazon-ssm-agent
+      - amazon-cloudwatch-agent
+    priority: ${JOURNALD_PRIORITY:-info}
+
+processors:
+  resourcedetection:
+    detectors:
+      - ec2
+      - env
+    timeout: 5s
+    override: false
+    ec2:
+      tags:
+        - ^Name$
+        - ^Environment$
+        - ^Team$
+        - ^Service$
+        - ^aws:autoscaling:groupName$
+
+  batch:
+    send_batch_size: ${BATCH_SIZE:-512}
+    send_batch_max_size: ${BATCH_MAX_SIZE:-1024}
+    timeout: ${BATCH_TIMEOUT:-5s}
+
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMITER_LIMIT_MIB:-512}
+    spike_limit_mib: ${MEMORY_LIMITER_SPIKE_MIB:-128}
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-production}
+        action: upsert
+      - key: service.name
+        value: ${OTEL_SERVICE_NAME:-ec2-host-agent}
+        action: upsert
+
+exporters:
+  otlp:
+    endpoint: ${OTEL_GATEWAY_ENDPOINT}
+    tls:
+      insecure: ${OTEL_EXPORTER_TLS_INSECURE:-false}
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 256
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+      output_paths:
+        - /var/log/otel-collector.log
+    metrics:
+      address: 0.0.0.0:8888
+
+  extensions:
+    - health_check
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+        - hostmetrics
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+        - filelog
+        - journald
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133

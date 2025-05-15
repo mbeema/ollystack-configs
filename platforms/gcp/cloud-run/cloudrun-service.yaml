@@ -1,0 +1,131 @@
+# Cloud Run Service definition with OpenTelemetry Collector sidecar
+# The collector runs as a sidecar container alongside the application container
+# Uses HTTP-only OTLP (Cloud Run sidecar does not support gRPC between containers)
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${SERVICE_NAME}
+  namespace: ${CLOUDRUN_NAMESPACE}
+  labels:
+    cloud.googleapis.com/location: ${GCP_REGION}
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+    run.googleapis.com/description: "Service with OpenTelemetry sidecar for observability"
+spec:
+  template:
+    metadata:
+      annotations:
+        # Enable sidecar containers (required for multi-container)
+        run.googleapis.com/container-dependencies: '{"${SERVICE_NAME}":["otel-collector"]}'
+        # Scaling
+        autoscaling.knative.dev/minScale: "${CLOUDRUN_MIN_INSTANCES}"
+        autoscaling.knative.dev/maxScale: "${CLOUDRUN_MAX_INSTANCES}"
+        # CPU allocation
+        run.googleapis.com/cpu-throttling: "${CLOUDRUN_CPU_THROTTLING}"
+        # Startup CPU boost
+        run.googleapis.com/startup-cpu-boost: "true"
+        # Execution environment
+        run.googleapis.com/execution-environment: gen2
+      labels:
+        app: ${SERVICE_NAME}
+        environment: ${ENVIRONMENT}
+    spec:
+      serviceAccountName: ${CLOUDRUN_SERVICE_ACCOUNT}
+      containerConcurrency: ${CLOUDRUN_CONCURRENCY}
+      timeoutSeconds: ${CLOUDRUN_TIMEOUT_SECONDS}
+      containers:
+        # --- Application container ---
+        - name: ${SERVICE_NAME}
+          image: "${APP_IMAGE}:${APP_IMAGE_TAG}"
+          ports:
+            - name: http1
+              containerPort: ${APP_PORT}
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://localhost:${OTLP_HTTP_PORT}"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_SERVICE_NAME
+              value: "${SERVICE_NAME}"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=${ENVIRONMENT},service.version=${SERVICE_VERSION}"
+            - name: OTEL_TRACES_SAMPLER
+              value: "${OTEL_TRACES_SAMPLER}"
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "${OTEL_TRACES_SAMPLER_ARG}"
+            - name: ENVIRONMENT
+              value: "${ENVIRONMENT}"
+          resources:
+            limits:
+              cpu: "${APP_CPU_LIMIT}"
+              memory: "${APP_MEMORY_LIMIT}"
+          startupProbe:
+            httpGet:
+              path: ${APP_HEALTH_PATH}
+              port: ${APP_PORT}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: ${APP_HEALTH_PATH}
+              port: ${APP_PORT}
+            periodSeconds: 15
+
+        # --- OpenTelemetry Collector sidecar ---
+        - name: otel-collector
+          image: "otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_VERSION}"
+          args:
+            - "--config=/etc/otel/otel-cloudrun-config.yaml"
+          env:
+            - name: GCP_PROJECT_ID
+              value: "${GCP_PROJECT_ID}"
+            - name: ENVIRONMENT
+              value: "${ENVIRONMENT}"
+            - name: SERVICE_NAME
+              value: "${SERVICE_NAME}"
+            - name: SERVICE_VERSION
+              value: "${SERVICE_VERSION}"
+            - name: OTLP_HTTP_PORT
+              value: "${OTLP_HTTP_PORT}"
+            - name: CLOUDRUN_BATCH_SIZE
+              value: "${CLOUDRUN_BATCH_SIZE}"
+            - name: CLOUDRUN_BATCH_MAX_SIZE
+              value: "${CLOUDRUN_BATCH_MAX_SIZE}"
+            - name: MEMORY_LIMITER_CHECK_INTERVAL
+              value: "${MEMORY_LIMITER_CHECK_INTERVAL}"
+            - name: CLOUDRUN_MEMORY_LIMITER_MIB
+              value: "${CLOUDRUN_MEMORY_LIMITER_MIB}"
+            - name: CLOUDRUN_MEMORY_SPIKE_MIB
+              value: "${CLOUDRUN_MEMORY_SPIKE_MIB}"
+            - name: GCP_LOG_NAME
+              value: "${GCP_LOG_NAME}"
+            - name: GCP_METRIC_PREFIX
+              value: "${GCP_METRIC_PREFIX}"
+            - name: HEALTH_CHECK_PORT
+              value: "${HEALTH_CHECK_PORT}"
+            - name: OTEL_LOG_LEVEL
+              value: "${OTEL_LOG_LEVEL}"
+          resources:
+            limits:
+              cpu: "${OTEL_SIDECAR_CPU_LIMIT}"
+              memory: "${OTEL_SIDECAR_MEMORY_LIMIT}"
+          startupProbe:
+            httpGet:
+              path: /
+              port: ${HEALTH_CHECK_PORT}
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            failureThreshold: 10
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel
+              readOnly: true
+      volumes:
+        - name: otel-config
+          secret:
+            secretName: ${OTEL_CONFIG_SECRET_NAME}
+            items:
+              - key: otel-cloudrun-config.yaml
+                path: otel-cloudrun-config.yaml

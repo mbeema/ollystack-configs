@@ -1,0 +1,178 @@
+# --------------------------------------------------------------------------
+# OpenTelemetry Collector Gateway Configuration (Deployment mode)
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Receives telemetry from agents, applies tail sampling, batches with
+# larger windows, and exports to the configured backend.
+# --------------------------------------------------------------------------
+
+receivers:
+  # Accept OTLP from agents
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Prevent out-of-memory situations - larger limit for gateway
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 2048
+    spike_limit_mib: 512
+
+  # Larger batch for gateway throughput
+  batch:
+    send_batch_size: 16384
+    send_batch_max_size: 32768
+    timeout: 10s
+
+  # Tail-based sampling for traces - composite strategy
+  tail_sampling:
+    decision_wait: ${TAIL_SAMPLING_WAIT:-10s}
+    num_traces: ${TAIL_SAMPLING_NUM_TRACES:-100000}
+    expected_new_traces_per_sec: ${TAIL_SAMPLING_EXPECTED_RATE:-1000}
+    policies:
+      # Always sample errors
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # Always sample high-latency requests
+      - name: latency-policy
+        type: latency
+        latency:
+          threshold_ms: ${TAIL_SAMPLING_LATENCY_THRESHOLD:-1000}
+
+      # Composite policy for overall sampling
+      - name: composite-policy
+        type: composite
+        composite:
+          max_total_spans_per_second: ${TAIL_SAMPLING_MAX_SPANS_PER_SEC:-5000}
+          policy_order:
+            - errors-always
+            - high-latency-always
+            - probabilistic-sample
+          composite_sub_policy:
+            # Keep 100% of error traces
+            - name: errors-always
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+            # Keep 100% of high-latency traces
+            - name: high-latency-always
+              type: latency
+              latency:
+                threshold_ms: ${TAIL_SAMPLING_LATENCY_THRESHOLD:-1000}
+            # Probabilistic sample the rest
+            - name: probabilistic-sample
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: ${TAIL_SAMPLING_PERCENTAGE:-10}
+          rate_allocation:
+            - policy: errors-always
+              percent: 40
+            - policy: high-latency-always
+              percent: 30
+            - policy: probabilistic-sample
+              percent: 30
+
+  # Add/override resource attributes at the gateway level
+  resource:
+    attributes:
+      - key: k8s.cluster.name
+        value: ${K8S_CLUSTER_NAME:-unknown}
+        action: upsert
+      - key: deployment.environment
+        value: ${DEPLOYMENT_ENVIRONMENT:-production}
+        action: upsert
+      - key: telemetry.gateway.name
+        value: otel-gateway
+        action: upsert
+
+exporters:
+  # Export to the configured backend
+  otlp:
+    endpoint: ${BACKEND_OTLP_ENDPOINT}
+    tls:
+      insecure: ${BACKEND_OTLP_INSECURE:-false}
+      cert_file: ${BACKEND_OTLP_CERT_FILE:-}
+      key_file: ${BACKEND_OTLP_KEY_FILE:-}
+    headers:
+      Authorization: ${BACKEND_OTLP_AUTH_HEADER:-}
+    compression: gzip
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 10000
+      storage: null
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+      max_elapsed_time: 600s
+    timeout: 30s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  # Ballast extension to reserve memory
+  ballast:
+    size_mib: ${BALLAST_SIZE_MIB:-683}
+
+service:
+  extensions:
+    - health_check
+    - pprof
+    - zpages
+    - ballast
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+    metrics:
+      address: 0.0.0.0:8888

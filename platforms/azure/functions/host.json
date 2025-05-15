@@ -1,0 +1,59 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "maxTelemetryItemsPerSecond": 20,
+        "evaluationInterval": "01:00:00",
+        "initialSamplingPercentage": 100.0,
+        "samplingPercentageIncreaseTimeout": "00:00:01",
+        "samplingPercentageDecreaseTimeout": "00:01:00",
+        "minSamplingPercentage": 0.1,
+        "maxSamplingPercentage": 100.0,
+        "movingAverageRatio": 1.0
+      },
+      "enableLiveMetrics": true,
+      "enableDependencyTracking": true,
+      "enablePerformanceCountersCollection": true
+    },
+    "logLevel": {
+      "default": "${FUNCTIONS_LOG_LEVEL:-Information}",
+      "Host.Results": "Information",
+      "Function": "Information",
+      "Host.Aggregator": "Warning"
+    }
+  },
+  "openTelemetry": {
+    "enabled": true,
+    "endpoint": "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}",
+    "protocol": "grpc",
+    "samplingRatio": "${OTEL_TRACES_SAMPLER_ARG:-1.0}",
+    "resource": {
+      "attributes": {
+        "service.name": "${SERVICE_NAME:-azure-function}",
+        "service.namespace": "${SERVICE_NAMESPACE:-azure-functions}",
+        "deployment.environment": "${ENVIRONMENT:-production}"
+      }
+    }
+  },
+  "extensions": {
+    "http": {
+      "routePrefix": "api",
+      "maxOutstandingRequests": 200,
+      "maxConcurrentRequests": 100,
+      "dynamicThrottlesEnabled": true
+    },
+    "queues": {
+      "maxPollingInterval": "00:00:02",
+      "visibilityTimeout": "00:00:30",
+      "batchSize": 16,
+      "maxDequeueCount": 5,
+      "newBatchThreshold": 8
+    }
+  },
+  "functionTimeout": "00:05:00",
+  "watchDirectories": [
+    "Shared"
+  ]
+}

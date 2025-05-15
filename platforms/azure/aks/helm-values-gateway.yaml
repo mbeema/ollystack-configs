@@ -1,0 +1,204 @@
+# Helm chart values for OpenTelemetry Collector Gateway on Azure AKS
+# Chart: open-telemetry/opentelemetry-collector
+# Usage: helm install otel-gateway open-telemetry/opentelemetry-collector -f helm-values-gateway.yaml -n observability
+
+mode: deployment
+
+nameOverride: otel-gateway
+
+replicaCount: 2
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: ${OTEL_COLLECTOR_VERSION:-0.96.0}
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: otel-gateway
+  annotations:
+    azure.workload.identity/client-id: ${AZURE_CLIENT_ID}
+
+podAnnotations:
+  azure.workload.identity/use: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"
+
+podLabels:
+  app.kubernetes.io/component: otel-gateway
+  azure.workload.identity/use: "true"
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+          max_recv_msg_size_mib: 16
+        http:
+          endpoint: "0.0.0.0:4318"
+
+  processors:
+    batch:
+      send_batch_size: 1024
+      timeout: 10s
+      send_batch_max_size: 2048
+    memory_limiter:
+      check_interval: 5s
+      limit_mib: 2048
+      spike_limit_mib: 512
+    tail_sampling:
+      decision_wait: 10s
+      num_traces: 100000
+      policies:
+        - name: errors-policy
+          type: status_code
+          status_code:
+            status_codes:
+              - ERROR
+        - name: latency-policy
+          type: latency
+          latency:
+            threshold_ms: 2000
+        - name: composite-policy
+          type: composite
+          composite:
+            max_total_spans_per_second: 500
+            policy_order:
+              - errors-always
+              - high-latency-always
+              - probabilistic-sample
+            composite_sub_policy:
+              - name: errors-always
+                type: status_code
+                status_code:
+                  status_codes:
+                    - ERROR
+              - name: high-latency-always
+                type: latency
+                latency:
+                  threshold_ms: 2000
+              - name: probabilistic-sample
+                type: probabilistic
+                probabilistic:
+                  sampling_percentage: 10
+            rate_allocation:
+              - policy: errors-always
+                percent: 40
+              - policy: high-latency-always
+                percent: 30
+              - policy: probabilistic-sample
+                percent: 30
+    resourcedetection:
+      detectors:
+        - azure
+        - aks
+        - env
+      timeout: 5s
+
+  exporters:
+    azuremonitor:
+      connection_string: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+    otlp:
+      endpoint: "${OTLP_EXPORTER_ENDPOINT}"
+      tls:
+        insecure: ${OTLP_TLS_INSECURE:-false}
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, tail_sampling, resourcedetection, batch]
+        exporters: [azuremonitor, otlp]
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, resourcedetection, batch]
+        exporters: [azuremonitor, otlp]
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, resourcedetection, batch]
+        exporters: [azuremonitor, otlp]
+
+env:
+  - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+    valueFrom:
+      secretKeyRef:
+        name: azure-monitor-secrets
+        key: connection-string
+  - name: OTLP_EXPORTER_ENDPOINT
+    value: ${OTLP_EXPORTER_ENDPOINT}
+  - name: AZURE_CLIENT_ID
+    value: ${AZURE_CLIENT_ID}
+  - name: AZURE_TENANT_ID
+    value: ${AZURE_TENANT_ID}
+
+resources:
+  limits:
+    cpu: ${GATEWAY_CPU_LIMIT:-2}
+    memory: ${GATEWAY_MEMORY_LIMIT:-4Gi}
+  requests:
+    cpu: ${GATEWAY_CPU_REQUEST:-500m}
+    memory: ${GATEWAY_MEMORY_REQUEST:-1Gi}
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: ${GATEWAY_MAX_REPLICAS:-10}
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/component: otel-gateway
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: otel-gateway
+          topologyKey: kubernetes.io/hostname
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+
+service:
+  type: ClusterIP
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 15
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 13133
+  initialDelaySeconds: 10
+  periodSeconds: 5

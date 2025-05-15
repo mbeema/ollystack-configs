@@ -1,0 +1,169 @@
+# OpenTelemetry Collector Gateway Configuration for Azure AKS
+# Runs as a Deployment to aggregate, sample, and export telemetry.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  batch:
+    send_batch_size: ${BATCH_SIZE:-1024}
+    timeout: ${BATCH_TIMEOUT:-10s}
+    send_batch_max_size: 2048
+
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMIT_MIB:-2048}
+    spike_limit_mib: ${MEMORY_SPIKE_LIMIT_MIB:-512}
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  tail_sampling:
+    decision_wait: ${SAMPLING_DECISION_WAIT:-10s}
+    num_traces: ${SAMPLING_NUM_TRACES:-100000}
+    expected_new_traces_per_sec: ${SAMPLING_EXPECTED_TRACES:-1000}
+    policies:
+      # Always sample traces with errors
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+      # Always sample traces with high latency (> 2s)
+      - name: latency-policy
+        type: latency
+        latency:
+          threshold_ms: ${SAMPLING_LATENCY_THRESHOLD:-2000}
+      # Composite policy for overall sampling
+      - name: composite-policy
+        type: composite
+        composite:
+          max_total_spans_per_second: ${SAMPLING_MAX_SPANS_PER_SEC:-500}
+          policy_order:
+            - errors-always
+            - high-latency-always
+            - probabilistic-sample
+          composite_sub_policy:
+            - name: errors-always
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+            - name: high-latency-always
+              type: latency
+              latency:
+                threshold_ms: ${SAMPLING_LATENCY_THRESHOLD:-2000}
+            - name: probabilistic-sample
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: ${SAMPLING_PERCENTAGE:-10}
+          rate_allocation:
+            - policy: errors-always
+              percent: 40
+            - policy: high-latency-always
+              percent: 30
+            - policy: probabilistic-sample
+              percent: 30
+
+  resourcedetection:
+    detectors:
+      - azure
+      - aks
+      - env
+    timeout: 5s
+    override: false
+    azure:
+      resource_attributes:
+        cloud.provider:
+          enabled: true
+        cloud.platform:
+          enabled: true
+        cloud.region:
+          enabled: true
+        cloud.account.id:
+          enabled: true
+        host.id:
+          enabled: true
+        host.name:
+          enabled: true
+
+exporters:
+  azuremonitor:
+    connection_string: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+    instrumentation_key: ${APPINSIGHTS_INSTRUMENTATIONKEY}
+    maxbatchsize: ${AZURE_MONITOR_BATCH_SIZE:-1024}
+    maxbatchinterval: ${AZURE_MONITOR_BATCH_INTERVAL:-10s}
+
+  otlp:
+    endpoint: "${OTLP_EXPORTER_ENDPOINT}"
+    tls:
+      insecure: ${OTLP_TLS_INSECURE:-false}
+      cert_file: ${OTLP_TLS_CERT:-}
+      key_file: ${OTLP_TLS_KEY:-}
+    headers:
+      Authorization: "Bearer ${OTLP_AUTH_TOKEN:-}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 20
+      queue_size: 10000
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+  zpages:
+    endpoint: "0.0.0.0:55679"
+  ballast:
+    size_mib: ${BALLAST_SIZE_MIB:-683}
+
+service:
+  extensions:
+    - health_check
+    - zpages
+    - ballast
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - resourcedetection
+        - batch
+      exporters:
+        - azuremonitor
+        - otlp
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - azuremonitor
+        - otlp
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - azuremonitor
+        - otlp
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+    metrics:
+      address: "0.0.0.0:8888"

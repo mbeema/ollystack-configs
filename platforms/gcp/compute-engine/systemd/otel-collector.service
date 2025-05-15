@@ -1,0 +1,52 @@
+# systemd unit file for OpenTelemetry Collector on GCE instances
+# Place in /etc/systemd/system/otel-collector.service
+# Then: systemctl daemon-reload && systemctl enable --now otel-collector
+
+[Unit]
+Description=OpenTelemetry Collector
+Documentation=https://opentelemetry.io/docs/collector/
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=${OTEL_USER}
+Group=${OTEL_GROUP}
+
+# Environment file with all configuration variables
+EnvironmentFile=${OTEL_CONFIG_DIR}/otel-collector.env
+
+# Main process
+ExecStart=${INSTALL_DIR}/otelcol-contrib --config=${OTEL_CONFIG_DIR}/otel-agent.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+MemoryMax=${MEMORY_LIMITER_LIMIT_MIB}M
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/etc
+ReadWritePaths=/var/log ${OTEL_HOME}
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=otel-collector
+
+# Capabilities
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

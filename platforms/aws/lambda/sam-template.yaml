@@ -1,0 +1,191 @@
+# AWS SAM Template for Lambda with OpenTelemetry Instrumentation
+# Deploys a Lambda function with the OTel Lambda Layer for automatic instrumentation.
+#
+# Usage:
+#   sam build && sam deploy --guided
+#
+# Required parameters (set during guided deploy or in samconfig.toml):
+#   OtelServiceName, OtelExporterEndpoint
+
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Lambda function instrumented with OpenTelemetry for distributed tracing,
+  metrics, and log correlation.
+
+Globals:
+  Function:
+    Timeout: ${LAMBDA_TIMEOUT:-30}
+    MemorySize: ${LAMBDA_MEMORY:-256}
+    Runtime: ${LAMBDA_RUNTIME:-python3.12}
+    Architectures:
+      - x86_64
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Deployment environment name.
+
+  OtelServiceName:
+    Type: String
+    Description: The service name reported to the observability backend.
+
+  OtelExporterEndpoint:
+    Type: String
+    Description: The OTLP exporter endpoint (e.g., https://gateway.example.com:4317).
+
+  OtelLambdaLayerArn:
+    Type: String
+    Default: ${OTEL_LAMBDA_LAYER_ARN:-arn:aws:lambda:us-east-1:901920570463:layer:aws-otel-python-amd64-ver-1-25-0:1}
+    Description: ARN of the AWS Distro for OpenTelemetry Lambda layer.
+
+  OtelCollectorConfigLayerArn:
+    Type: String
+    Default: ""
+    Description: >
+      Optional ARN of a Lambda layer containing a custom collector config.
+      If empty, the default OTel Lambda layer config is used.
+
+  LambdaSubnetIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: Comma-separated list of subnet IDs for VPC-connected Lambda.
+
+  LambdaSecurityGroupIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: Comma-separated list of security group IDs for VPC-connected Lambda.
+
+Conditions:
+  HasVpcConfig:
+    !Not [!Equals [!Join ["", !Ref LambdaSubnetIds], ""]]
+  HasCustomCollectorConfig:
+    !Not [!Equals [!Ref OtelCollectorConfigLayerArn, ""]]
+
+Resources:
+  InstrumentedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${OtelServiceName}-${Environment}"
+      Handler: ${LAMBDA_HANDLER:-app.lambda_handler}
+      CodeUri: ${LAMBDA_CODE_URI:-src/}
+      Description: !Sub "Lambda function for ${OtelServiceName} with OTel instrumentation"
+      Layers:
+        - !Ref OtelLambdaLayerArn
+        - !If
+          - HasCustomCollectorConfig
+          - !Ref OtelCollectorConfigLayerArn
+          - !Ref AWS::NoValue
+      Environment:
+        Variables:
+          # OTel configuration
+          OTEL_SERVICE_NAME: !Ref OtelServiceName
+          OTEL_EXPORTER_OTLP_ENDPOINT: !Ref OtelExporterEndpoint
+          OTEL_PROPAGATORS: ${OTEL_PROPAGATORS:-tracecontext,baggage,xray}
+          OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+          OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
+          OTEL_RESOURCE_ATTRIBUTES: !Sub "deployment.environment=${Environment},service.name=${OtelServiceName}"
+          OTEL_LOG_LEVEL: ${OTEL_LOG_LEVEL:-warn}
+          # Lambda auto-instrumentation wrapper
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+          # Application configuration
+          ENVIRONMENT: !Ref Environment
+          POWERTOOLS_SERVICE_NAME: !Ref OtelServiceName
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            # Allow X-Ray tracing
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+                - xray:GetSamplingRules
+                - xray:GetSamplingTargets
+              Resource: "*"
+            # Allow writing to CloudWatch Logs
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+      Tracing: Active
+      VpcConfig:
+        !If
+          - HasVpcConfig
+          - SubnetIds: !Ref LambdaSubnetIds
+            SecurityGroupIds: !Ref LambdaSecurityGroupIds
+          - !Ref AWS::NoValue
+      Tags:
+        Platform: aws
+        Service: lambda
+        Component: otel-instrumented
+        Environment: !Ref Environment
+        ManagedBy: sam
+
+  # CloudWatch Log Group with retention
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${InstrumentedFunction}"
+      RetentionInDays: ${CW_LOG_RETENTION:-30}
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: !Ref OtelServiceName
+
+  # CloudWatch Alarm for function errors
+  FunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${OtelServiceName}-${Environment}-errors"
+      AlarmDescription: !Sub "Alarm when ${OtelServiceName} Lambda function error rate is high"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InstrumentedFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: ${LAMBDA_ERROR_THRESHOLD:-5}
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for cold start duration
+  FunctionDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${OtelServiceName}-${Environment}-duration"
+      AlarmDescription: !Sub "Alarm when ${OtelServiceName} Lambda duration exceeds threshold"
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InstrumentedFunction
+      Statistic: p99
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: ${LAMBDA_DURATION_THRESHOLD:-5000}
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  FunctionArn:
+    Description: ARN of the instrumented Lambda function
+    Value: !GetAtt InstrumentedFunction.Arn
+
+  FunctionName:
+    Description: Name of the instrumented Lambda function
+    Value: !Ref InstrumentedFunction
+
+  LogGroupName:
+    Description: CloudWatch Log Group for the function
+    Value: !Ref FunctionLogGroup

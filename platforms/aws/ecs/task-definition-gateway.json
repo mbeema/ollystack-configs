@@ -1,0 +1,130 @@
+{
+  "family": "${ECS_GATEWAY_TASK_FAMILY:-otel-gateway}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "otel-gateway",
+      "image": "otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_VERSION:-0.98.0}",
+      "essential": true,
+      "command": ["--config", "/etc/otel/config.yaml"],
+      "portMappings": [
+        {
+          "containerPort": 4317,
+          "protocol": "tcp",
+          "appProtocol": "grpc"
+        },
+        {
+          "containerPort": 4318,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 8888,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 13133,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "OTEL_BACKEND_ENDPOINT",
+          "value": "${OTEL_BACKEND_ENDPOINT}"
+        },
+        {
+          "name": "OTEL_LOG_LEVEL",
+          "value": "${OTEL_LOG_LEVEL:-info}"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "${ENVIRONMENT:-production}"
+        },
+        {
+          "name": "CW_LOG_GROUP",
+          "value": "${CW_LOG_GROUP:-/observability/ecs/otel}"
+        },
+        {
+          "name": "CW_LOG_STREAM",
+          "value": "${CW_LOG_STREAM:-otel-gateway}"
+        },
+        {
+          "name": "CW_LOG_RETENTION",
+          "value": "${CW_LOG_RETENTION:-30}"
+        },
+        {
+          "name": "TAIL_SAMPLING_PERCENTAGE",
+          "value": "${TAIL_SAMPLING_PERCENTAGE:-10}"
+        },
+        {
+          "name": "TAIL_SAMPLING_LATENCY_THRESHOLD",
+          "value": "${TAIL_SAMPLING_LATENCY_THRESHOLD:-1000}"
+        },
+        {
+          "name": "MEMORY_LIMITER_LIMIT_MIB",
+          "value": "1536"
+        },
+        {
+          "name": "MEMORY_LIMITER_SPIKE_MIB",
+          "value": "384"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "OTEL_EXPORTER_OTLP_HEADERS",
+          "valueFrom": "${SSM_OTEL_HEADERS_ARN:-arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/otel/exporter/headers}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${CW_OTEL_LOG_GROUP:-/ecs/otel-gateway}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "gateway",
+          "awslogs-create-group": "true"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget --spider -q http://localhost:13133/ || exit 1"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "cpu": 1024,
+      "memory": 2048,
+      "memoryReservation": 1024
+    }
+  ],
+  "volumes": [],
+  "tags": [
+    {
+      "key": "Platform",
+      "value": "aws"
+    },
+    {
+      "key": "Service",
+      "value": "ecs"
+    },
+    {
+      "key": "Component",
+      "value": "otel-gateway"
+    },
+    {
+      "key": "Environment",
+      "value": "${ENVIRONMENT:-production}"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "opentelemetry"
+    }
+  ]
+}

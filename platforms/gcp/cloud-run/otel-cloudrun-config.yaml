@@ -1,0 +1,112 @@
+# OpenTelemetry Collector Configuration for Cloud Run (Sidecar Pattern)
+# Cloud Run does not support gRPC for sidecar containers, so only HTTP receiver is enabled
+# Uses short batch timeouts to minimize data loss during scale-to-zero
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "0.0.0.0:${OTLP_HTTP_PORT}"
+        cors:
+          allowed_origins:
+            - "*"
+
+processors:
+  batch:
+    send_batch_size: ${CLOUDRUN_BATCH_SIZE}
+    send_batch_max_size: ${CLOUDRUN_BATCH_MAX_SIZE}
+    timeout: 1s
+
+  memory_limiter:
+    check_interval: ${MEMORY_LIMITER_CHECK_INTERVAL}
+    limit_mib: ${CLOUDRUN_MEMORY_LIMITER_MIB}
+    spike_limit_mib: ${CLOUDRUN_MEMORY_SPIKE_MIB}
+
+  resourcedetection:
+    detectors:
+      - env
+      - gcp
+    timeout: 5s
+    override: false
+
+  resource:
+    attributes:
+      - key: cloud.provider
+        value: gcp
+        action: upsert
+      - key: cloud.platform
+        value: gcp_cloud_run
+        action: upsert
+      - key: deployment.environment
+        value: "${ENVIRONMENT}"
+        action: upsert
+      - key: service.name
+        value: "${SERVICE_NAME}"
+        action: upsert
+      - key: service.version
+        value: "${SERVICE_VERSION}"
+        action: upsert
+
+exporters:
+  googlecloud:
+    project: "${GCP_PROJECT_ID}"
+    log:
+      default_log_name: "${GCP_LOG_NAME}"
+    trace:
+      endpoint: cloudtrace.googleapis.com:443
+    metric:
+      endpoint: monitoring.googleapis.com:443
+      prefix: "${GCP_METRIC_PREFIX}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 500
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:${HEALTH_CHECK_PORT}"
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+  telemetry:
+    logs:
+      level: "${OTEL_LOG_LEVEL}"
+    metrics:
+      level: none

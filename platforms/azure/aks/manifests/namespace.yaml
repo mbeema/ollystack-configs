@@ -1,0 +1,11 @@
+# Namespace for OpenTelemetry Collector components on Azure AKS
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: observability
+    app.kubernetes.io/part-of: opentelemetry
+    app.kubernetes.io/managed-by: kubectl
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted

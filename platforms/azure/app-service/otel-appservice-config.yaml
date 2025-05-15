@@ -1,0 +1,127 @@
+# OpenTelemetry Collector Configuration for Azure App Service
+# Runs as a sidecar container or via the App Service extension.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  batch:
+    send_batch_size: ${BATCH_SIZE:-512}
+    timeout: ${BATCH_TIMEOUT:-5s}
+    send_batch_max_size: 1024
+
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMIT_MIB:-512}
+    spike_limit_mib: ${MEMORY_SPIKE_LIMIT_MIB:-128}
+
+  resource:
+    attributes:
+      - key: cloud.provider
+        value: azure
+        action: upsert
+      - key: cloud.platform
+        value: azure_app_service
+        action: upsert
+      - key: service.name
+        value: ${WEBSITE_SITE_NAME:-unknown}
+        action: upsert
+      - key: service.namespace
+        value: ${SERVICE_NAMESPACE:-azure-app-service}
+        action: upsert
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-production}
+        action: upsert
+      - key: cloud.region
+        value: ${REGION_NAME:-unknown}
+        action: upsert
+      - key: cloud.resource_id
+        value: ${WEBSITE_RESOURCE_GROUP:-unknown}
+        action: upsert
+      - key: host.name
+        value: ${WEBSITE_HOSTNAME:-unknown}
+        action: upsert
+      - key: faas.instance
+        value: ${WEBSITE_INSTANCE_ID:-unknown}
+        action: upsert
+
+  resourcedetection:
+    detectors:
+      - azure
+      - env
+    timeout: 5s
+    override: false
+
+exporters:
+  azuremonitor:
+    connection_string: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+    maxbatchsize: ${AZURE_MONITOR_BATCH_SIZE:-512}
+    maxbatchinterval: ${AZURE_MONITOR_BATCH_INTERVAL:-10s}
+
+  otlp:
+    endpoint: "${OTLP_EXPORTER_ENDPOINT}"
+    tls:
+      insecure: ${OTLP_TLS_INSECURE:-false}
+    headers:
+      Authorization: "Bearer ${OTLP_AUTH_TOKEN:-}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - azuremonitor
+        - otlp
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - azuremonitor
+        - otlp
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - azuremonitor
+        - otlp
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+    metrics:
+      address: "0.0.0.0:8888"

@@ -1,0 +1,258 @@
+# OpenTelemetry Collector Agent Configuration - Linux Host
+# Runs on each host to collect local telemetry and forward to gateway.
+#
+# Environment Variables:
+#   GATEWAY_ENDPOINT    - Gateway OTLP gRPC endpoint (e.g., gateway.internal:4317)
+#   ENVIRONMENT         - Deployment environment (e.g., production, staging)
+#   TEAM                - Owning team name
+#   NODE_NAME           - Logical node/host name override
+#   OTLP_GRPC_PORT      - OTLP gRPC listen port (default: 4317)
+#   OTLP_HTTP_PORT      - OTLP HTTP listen port (default: 4318)
+#   MEMORY_LIMIT_MIB    - Memory limiter hard limit (default: 400)
+#   MEMORY_SPIKE_MIB    - Memory limiter spike limit (default: 100)
+#   SYSLOG_TCP_PORT     - Syslog TCP listen port (default: 514)
+
+receivers:
+  # OTLP receiver for application-instrumented telemetry
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:${OTLP_GRPC_PORT:-4317}
+      http:
+        endpoint: 0.0.0.0:${OTLP_HTTP_PORT:-4318}
+
+  # Host metrics collection
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      disk:
+        metrics:
+          system.disk.io:
+            enabled: true
+          system.disk.operations:
+            enabled: true
+      filesystem:
+        metrics:
+          system.filesystem.utilization:
+            enabled: true
+        exclude_mount_points:
+          mount_points:
+            - /dev/*
+            - /proc/*
+            - /sys/*
+            - /run/*
+            - /snap/*
+          match_type: regexp
+      network:
+        metrics:
+          system.network.io:
+            enabled: true
+          system.network.connections:
+            enabled: true
+          system.network.errors:
+            enabled: true
+        exclude:
+          interfaces:
+            - lo
+          match_type: strict
+      process:
+        metrics:
+          process.cpu.utilization:
+            enabled: true
+          process.memory.usage:
+            enabled: true
+          process.disk.io:
+            enabled: true
+        mute_process_name_error: true
+        mute_process_exe_error: true
+
+  # File log receiver for standard Linux log files
+  filelog:
+    include:
+      - /var/log/syslog
+      - /var/log/messages
+      - /var/log/auth.log
+    include_file_name: true
+    include_file_path: true
+    poll_interval: 500ms
+    start_at: end
+    multiline:
+      line_start_pattern: '^\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
+    operators:
+      - type: regex_parser
+        regex: '^(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<hostname>\S+)\s+(?P<process>\S+?)(?:\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: '%b %d %H:%M:%S'
+          layout_type: gotime
+        severity:
+          parse_from: attributes.message
+      - type: move
+        from: attributes.message
+        to: body
+      - type: move
+        from: attributes.hostname
+        to: resource["host.name"]
+
+  # Journald receiver for systemd journal logs
+  journald:
+    directory: /var/log/journal
+    units:
+      - sshd
+      - docker
+      - kubelet
+      - otel-collector
+      - nginx
+      - httpd
+      - postgresql
+      - mysql
+    priority: info
+    start_at: end
+
+  # Syslog receiver for remote syslog ingestion
+  syslog:
+    tcp:
+      listen_address: 0.0.0.0:${SYSLOG_TCP_PORT:-514}
+    protocol: rfc5424
+
+processors:
+  # Resource detection to automatically identify host attributes
+  resourcedetection:
+    detectors:
+      - system
+    system:
+      hostname_sources:
+        - lookup
+        - os
+      resource_attributes:
+        host.name:
+          enabled: true
+        host.id:
+          enabled: true
+        os.type:
+          enabled: true
+        os.description:
+          enabled: true
+        host.arch:
+          enabled: true
+        host.ip:
+          enabled: true
+
+  # Add custom resource attributes from environment variables
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-unknown}
+        action: upsert
+      - key: team
+        value: ${TEAM:-platform}
+        action: upsert
+      - key: node.name
+        value: ${NODE_NAME:-}
+        action: upsert
+      - key: collector.type
+        value: agent
+        action: upsert
+
+  # Batch processor to reduce export overhead
+  batch:
+    send_batch_size: 8192
+    send_batch_max_size: 16384
+    timeout: 5s
+
+  # Memory limiter to prevent OOM on the host
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMIT_MIB:-400}
+    spike_limit_mib: ${MEMORY_SPIKE_MIB:-100}
+
+exporters:
+  # Forward all telemetry to the gateway via OTLP gRPC
+  otlp:
+    endpoint: ${GATEWAY_ENDPOINT}
+    tls:
+      insecure: ${OTLP_INSECURE:-true}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 1000
+
+  # Debug exporter for troubleshooting (disabled by default)
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  zpages:
+    endpoint: 0.0.0.0:55679
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+service:
+  extensions:
+    - health_check
+    - zpages
+    - pprof
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+        - hostmetrics
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+        - filelog
+        - journald
+        - syslog
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: info
+      output_paths:
+        - /var/log/otel-collector/collector.log
+    metrics:
+      level: basic
+      address: 0.0.0.0:8888

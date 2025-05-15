@@ -1,0 +1,123 @@
+# Deployment for OTel Gateway on EKS
+# Centralized gateway that aggregates telemetry and exports to AWS services.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: opentelemetry
+    platform: aws
+    service: eks
+spec:
+  replicas: ${GATEWAY_REPLICAS:-2}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-gateway
+      app.kubernetes.io/component: gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-gateway
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/part-of: opentelemetry
+        platform: aws
+        service: eks
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: otel-gateway
+      # Spread across availability zones
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-gateway
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - otel-gateway
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: otel-gateway
+          image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_VERSION:-0.98.0}
+          args:
+            - --config=/etc/otelcol-contrib/config.yaml
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+            - name: healthcheck
+              containerPort: 13133
+              protocol: TCP
+          env:
+            - name: AWS_REGION
+              value: ${AWS_REGION}
+            - name: EKS_CLUSTER_NAME
+              value: ${EKS_CLUSTER_NAME}
+            - name: OTEL_BACKEND_ENDPOINT
+              value: ${OTEL_BACKEND_ENDPOINT:-tempo.observability.svc.cluster.local:4317}
+            - name: OTEL_LOG_LEVEL
+              value: ${OTEL_LOG_LEVEL:-info}
+            - name: CW_LOG_GROUP
+              value: ${CW_LOG_GROUP:-/observability/${EKS_CLUSTER_NAME}/otel}
+            - name: CW_LOG_STREAM
+              value: ${CW_LOG_STREAM:-otel-gateway}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "k8s.cluster.name=${EKS_CLUSTER_NAME},deployment.environment=${ENVIRONMENT:-production}"
+          resources:
+            limits:
+              cpu: ${GATEWAY_CPU_LIMIT:-2000m}
+              memory: ${GATEWAY_MEMORY_LIMIT:-4Gi}
+            requests:
+              cpu: ${GATEWAY_CPU_REQUEST:-500m}
+              memory: ${GATEWAY_MEMORY_REQUEST:-1Gi}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: otel-gateway-config

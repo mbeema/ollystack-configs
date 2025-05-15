@@ -1,0 +1,212 @@
+# Deployment for OpenTelemetry Collector Gateway on GKE
+# Centralized gateway that receives telemetry from agents and exports to backends
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: observability
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-gateway
+      app.kubernetes.io/component: gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-gateway
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/part-of: observability
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "${TELEMETRY_METRICS_PORT}"
+    spec:
+      serviceAccountName: ${OTEL_GATEWAY_SERVICE_ACCOUNT}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: otel-gateway
+                    app.kubernetes.io/component: gateway
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-gateway
+              app.kubernetes.io/component: gateway
+      containers:
+        - name: otel-gateway
+          image: "otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_VERSION}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - "/otelcol-contrib"
+            - "--config=/conf/otel-gateway.yaml"
+          env:
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: GCP_PROJECT_ID
+              value: "${GCP_PROJECT_ID}"
+            - name: GCP_LOG_NAME
+              value: "${GCP_LOG_NAME}"
+            - name: GCP_METRIC_PREFIX
+              value: "${GCP_METRIC_PREFIX}"
+            - name: CLUSTER_NAME
+              value: "${CLUSTER_NAME}"
+            - name: ENVIRONMENT
+              value: "${ENVIRONMENT}"
+            - name: OTLP_GRPC_PORT
+              value: "${OTLP_GRPC_PORT}"
+            - name: OTLP_HTTP_PORT
+              value: "${OTLP_HTTP_PORT}"
+            - name: GATEWAY_BATCH_SIZE
+              value: "${GATEWAY_BATCH_SIZE}"
+            - name: GATEWAY_BATCH_MAX_SIZE
+              value: "${GATEWAY_BATCH_MAX_SIZE}"
+            - name: MEMORY_LIMITER_CHECK_INTERVAL
+              value: "${MEMORY_LIMITER_CHECK_INTERVAL}"
+            - name: TAIL_SAMPLING_WAIT
+              value: "${TAIL_SAMPLING_WAIT}"
+            - name: TAIL_SAMPLING_NUM_TRACES
+              value: "${TAIL_SAMPLING_NUM_TRACES}"
+            - name: TAIL_SAMPLING_EXPECTED_NEW_TRACES
+              value: "${TAIL_SAMPLING_EXPECTED_NEW_TRACES}"
+            - name: TAIL_SAMPLING_MAX_SPANS_PER_SEC
+              value: "${TAIL_SAMPLING_MAX_SPANS_PER_SEC}"
+            - name: TAIL_SAMPLING_LATENCY_THRESHOLD_MS
+              value: "${TAIL_SAMPLING_LATENCY_THRESHOLD_MS}"
+            - name: TAIL_SAMPLING_PERCENTAGE
+              value: "${TAIL_SAMPLING_PERCENTAGE}"
+            - name: SECONDARY_OTLP_ENDPOINT
+              value: "${SECONDARY_OTLP_ENDPOINT}"
+            - name: SECONDARY_OTLP_TLS_INSECURE
+              value: "${SECONDARY_OTLP_TLS_INSECURE}"
+            - name: SECONDARY_OTLP_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: "${OTLP_AUTH_SECRET_NAME}"
+                  key: token
+                  optional: true
+            - name: HEALTH_CHECK_PORT
+              value: "${HEALTH_CHECK_PORT}"
+            - name: ZPAGES_PORT
+              value: "${ZPAGES_PORT}"
+            - name: OTEL_LOG_LEVEL
+              value: "${OTEL_LOG_LEVEL}"
+            - name: TELEMETRY_METRICS_PORT
+              value: "${TELEMETRY_METRICS_PORT}"
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "${GATEWAY_CPU_LIMIT}"
+              memory: "${GATEWAY_MEMORY_LIMIT}"
+            requests:
+              cpu: "${GATEWAY_CPU_REQUEST}"
+              memory: "${GATEWAY_MEMORY_REQUEST}"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: otel-gateway-config
+
+---
+# HorizontalPodAutoscaler for the gateway
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: observability
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: otel-gateway
+  minReplicas: 2
+  maxReplicas: ${GATEWAY_MAX_REPLICAS}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# PodDisruptionBudget for the gateway
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: observability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-gateway
+      app.kubernetes.io/component: gateway

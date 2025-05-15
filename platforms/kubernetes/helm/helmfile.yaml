@@ -1,0 +1,88 @@
+# --------------------------------------------------------------------------
+# Helmfile for deploying OpenTelemetry Collector via Helm
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Deploys both agent (DaemonSet) and gateway (Deployment) using the
+# official opentelemetry-collector Helm chart with separate value files.
+#
+# Usage:
+#   helmfile -f helmfile.yaml sync
+#   helmfile -f helmfile.yaml diff
+#   helmfile -f helmfile.yaml destroy
+# --------------------------------------------------------------------------
+
+helmDefaults:
+  wait: true
+  timeout: 600
+  createNamespace: true
+  atomic: true
+
+repositories:
+  - name: open-telemetry
+    url: https://open-telemetry.github.io/opentelemetry-helm-charts
+
+environments:
+  default:
+    values:
+      - namespace: {{ env "OTEL_NAMESPACE" | default "observability" }}
+        clusterName: {{ env "K8S_CLUSTER_NAME" | default "unknown" }}
+        environment: {{ env "DEPLOYMENT_ENVIRONMENT" | default "production" }}
+        collectorVersion: {{ env "OTEL_COLLECTOR_VERSION" | default "0.96.0" }}
+        backendEndpoint: {{ requiredEnv "BACKEND_OTLP_ENDPOINT" }}
+
+releases:
+  # --------------------------------------------------------------------------
+  # OTel Collector Agent - DaemonSet mode
+  # --------------------------------------------------------------------------
+  - name: otel-agent
+    namespace: {{ .Values | get "namespace" "observability" }}
+    chart: open-telemetry/opentelemetry-collector
+    version: {{ env "OTEL_HELM_CHART_VERSION" | default "0.78.0" }}
+    values:
+      - values-agent.yaml
+    set:
+      - name: image.tag
+        value: {{ .Values | get "collectorVersion" "0.96.0" }}
+      - name: fullnameOverride
+        value: otel-agent
+    labels:
+      component: agent
+      tier: collection
+
+  # --------------------------------------------------------------------------
+  # OTel Collector Gateway - Deployment mode
+  # --------------------------------------------------------------------------
+  - name: otel-gateway
+    namespace: {{ .Values | get "namespace" "observability" }}
+    chart: open-telemetry/opentelemetry-collector
+    version: {{ env "OTEL_HELM_CHART_VERSION" | default "0.78.0" }}
+    values:
+      - values-gateway.yaml
+    set:
+      - name: image.tag
+        value: {{ .Values | get "collectorVersion" "0.96.0" }}
+      - name: fullnameOverride
+        value: otel-gateway
+    labels:
+      component: gateway
+      tier: collection
+
+  # --------------------------------------------------------------------------
+  # OpenTelemetry Operator (optional - for auto-instrumentation CRs)
+  # --------------------------------------------------------------------------
+  - name: otel-operator
+    namespace: {{ .Values | get "namespace" "observability" }}
+    chart: open-telemetry/opentelemetry-operator
+    version: {{ env "OTEL_OPERATOR_CHART_VERSION" | default "0.51.0" }}
+    installed: {{ env "INSTALL_OTEL_OPERATOR" | default "false" }}
+    values:
+      - manager:
+          collectorImage:
+            repository: otel/opentelemetry-collector-contrib
+            tag: {{ .Values | get "collectorVersion" "0.96.0" }}
+        admissionWebhooks:
+          certManager:
+            enabled: {{ env "CERT_MANAGER_ENABLED" | default "true" }}
+    labels:
+      component: operator
+      tier: management

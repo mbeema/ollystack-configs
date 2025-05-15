@@ -1,0 +1,164 @@
+# OpenTelemetry Collector Gateway Configuration for GKE
+# Deployed as a Deployment (centralized) receiving telemetry from agents
+# Exports to Google Cloud and optional secondary OTLP destination
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:${OTLP_GRPC_PORT}"
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: "0.0.0.0:${OTLP_HTTP_PORT}"
+
+processors:
+  batch:
+    send_batch_size: ${GATEWAY_BATCH_SIZE}
+    send_batch_max_size: ${GATEWAY_BATCH_MAX_SIZE}
+    timeout: 10s
+
+  memory_limiter:
+    check_interval: ${MEMORY_LIMITER_CHECK_INTERVAL}
+    limit_mib: 2048
+    spike_limit_mib: 512
+
+  tail_sampling:
+    decision_wait: ${TAIL_SAMPLING_WAIT}
+    num_traces: ${TAIL_SAMPLING_NUM_TRACES}
+    expected_new_traces_per_sec: ${TAIL_SAMPLING_EXPECTED_NEW_TRACES}
+    policies:
+      - name: composite-policy
+        type: composite
+        composite:
+          max_total_spans_per_second: ${TAIL_SAMPLING_MAX_SPANS_PER_SEC}
+          policy_order:
+            - always-sample-errors
+            - sample-long-latency
+            - probabilistic-policy
+          composite_sub_policy:
+            - name: always-sample-errors
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+            - name: sample-long-latency
+              type: latency
+              latency:
+                threshold_ms: ${TAIL_SAMPLING_LATENCY_THRESHOLD_MS}
+            - name: probabilistic-policy
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: ${TAIL_SAMPLING_PERCENTAGE}
+          rate_allocation:
+            - policy: always-sample-errors
+              percent: 40
+            - policy: sample-long-latency
+              percent: 30
+            - policy: probabilistic-policy
+              percent: 30
+
+  resourcedetection:
+    detectors:
+      - env
+      - gcp
+    timeout: 5s
+    override: false
+
+  resource:
+    attributes:
+      - key: cloud.provider
+        value: gcp
+        action: upsert
+      - key: deployment.environment
+        value: "${ENVIRONMENT}"
+        action: upsert
+      - key: cluster.name
+        value: "${CLUSTER_NAME}"
+        action: upsert
+
+exporters:
+  googlecloud:
+    project: "${GCP_PROJECT_ID}"
+    log:
+      default_log_name: "${GCP_LOG_NAME}"
+    trace:
+      endpoint: cloudtrace.googleapis.com:443
+    metric:
+      endpoint: monitoring.googleapis.com:443
+      prefix: "${GCP_METRIC_PREFIX}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+
+  otlp:
+    endpoint: "${SECONDARY_OTLP_ENDPOINT}"
+    tls:
+      insecure: ${SECONDARY_OTLP_TLS_INSECURE}
+    headers:
+      Authorization: "Bearer ${SECONDARY_OTLP_AUTH_TOKEN}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:${HEALTH_CHECK_PORT}"
+  zpages:
+    endpoint: "0.0.0.0:${ZPAGES_PORT}"
+
+service:
+  extensions:
+    - health_check
+    - zpages
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+        - otlp
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+        - otlp
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - googlecloud
+        - otlp
+  telemetry:
+    logs:
+      level: "${OTEL_LOG_LEVEL}"
+    metrics:
+      address: "0.0.0.0:${TELEMETRY_METRICS_PORT}"

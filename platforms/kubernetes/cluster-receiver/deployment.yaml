@@ -1,0 +1,218 @@
+# --------------------------------------------------------------------------
+# Deployment for OpenTelemetry Cluster Receiver
+# Generic Kubernetes platform - reusable by EKS/AKS/GKE
+#
+# Single replica deployment collecting cluster-level metrics and events.
+# Must run as a single instance to avoid duplicate metrics.
+# --------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-cluster-receiver-config
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-cluster-receiver
+    app.kubernetes.io/component: cluster-receiver
+    app.kubernetes.io/part-of: opentelemetry
+data:
+  config.yaml: |
+    receivers:
+      k8s_cluster:
+        collection_interval: ${CLUSTER_METRICS_INTERVAL:-30s}
+        node_conditions_to_report:
+          - Ready
+          - MemoryPressure
+          - DiskPressure
+          - PIDPressure
+          - NetworkUnavailable
+        allocatable_types_to_report:
+          - cpu
+          - memory
+          - storage
+          - ephemeral-storage
+        metadata_collection_interval: 5m
+
+      k8s_events:
+        auth_type: serviceAccount
+        namespaces: []
+
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      batch:
+        send_batch_size: 8192
+        timeout: 5s
+      resource:
+        attributes:
+          - key: k8s.cluster.name
+            value: ${K8S_CLUSTER_NAME:-unknown}
+            action: upsert
+          - key: deployment.environment
+            value: ${DEPLOYMENT_ENVIRONMENT:-production}
+            action: upsert
+          - key: telemetry.collector.role
+            value: cluster-receiver
+            action: upsert
+
+    exporters:
+      otlp:
+        endpoint: otel-gateway.${OTEL_NAMESPACE:-observability}.svc.cluster.local:4317
+        tls:
+          insecure: ${OTEL_GATEWAY_INSECURE:-true}
+        sending_queue:
+          enabled: true
+          num_consumers: 4
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [k8s_cluster]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp]
+        logs:
+          receivers: [k8s_events]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp]
+      telemetry:
+        logs:
+          level: ${OTEL_LOG_LEVEL:-info}
+        metrics:
+          address: 0.0.0.0:8888
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-cluster-receiver
+  namespace: ${OTEL_NAMESPACE:-observability}
+  labels:
+    app.kubernetes.io/name: otel-cluster-receiver
+    app.kubernetes.io/component: cluster-receiver
+    app.kubernetes.io/part-of: opentelemetry
+spec:
+  # Must be exactly 1 to avoid duplicate cluster metrics
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-cluster-receiver
+      app.kubernetes.io/component: cluster-receiver
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-cluster-receiver
+        app.kubernetes.io/component: cluster-receiver
+        app.kubernetes.io/part-of: opentelemetry
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: otel-collector
+      terminationGracePeriodSeconds: 30
+
+      nodeSelector:
+        kubernetes.io/os: linux
+
+      containers:
+        - name: otel-cluster-receiver
+          image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib}:${OTEL_COLLECTOR_VERSION:-0.96.0}
+          imagePullPolicy: IfNotPresent
+          command:
+            - "/otelcol-contrib"
+            - "--config=/etc/otelcol/config.yaml"
+
+          ports:
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+
+          env:
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_CLUSTER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-env-config
+                  key: K8S_CLUSTER_NAME
+                  optional: true
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-env-config
+                  key: DEPLOYMENT_ENVIRONMENT
+                  optional: true
+            - name: OTEL_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-env-config
+                  key: OTEL_LOG_LEVEL
+                  optional: true
+
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+              readOnly: true
+
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+
+      volumes:
+        - name: config
+          configMap:
+            name: otel-cluster-receiver-config
+            items:
+              - key: config.yaml
+                path: config.yaml

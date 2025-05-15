@@ -1,0 +1,96 @@
+# OpenTelemetry Collector Configuration for Azure Functions
+# Minimal configuration optimized for serverless workloads.
+# The collector runs as a sidecar or extension alongside the function app.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  batch:
+    send_batch_size: ${BATCH_SIZE:-256}
+    timeout: ${BATCH_TIMEOUT:-1s}
+    send_batch_max_size: 512
+
+  memory_limiter:
+    check_interval: 3s
+    limit_mib: ${MEMORY_LIMIT_MIB:-256}
+    spike_limit_mib: ${MEMORY_SPIKE_LIMIT_MIB:-64}
+
+  resource:
+    attributes:
+      - key: cloud.provider
+        value: azure
+        action: upsert
+      - key: cloud.platform
+        value: azure_functions
+        action: upsert
+      - key: faas.name
+        value: ${WEBSITE_SITE_NAME:-unknown}
+        action: upsert
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-production}
+        action: upsert
+      - key: service.name
+        value: ${SERVICE_NAME:-azure-function}
+        action: upsert
+      - key: service.namespace
+        value: ${SERVICE_NAMESPACE:-azure-functions}
+        action: upsert
+      - key: cloud.region
+        value: ${REGION_NAME:-unknown}
+        action: upsert
+      - key: cloud.resource_id
+        value: ${WEBSITE_RESOURCE_GROUP:-unknown}
+        action: upsert
+
+exporters:
+  azuremonitor:
+    connection_string: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+    maxbatchsize: ${AZURE_MONITOR_BATCH_SIZE:-256}
+    maxbatchinterval: ${AZURE_MONITOR_BATCH_INTERVAL:-5s}
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - azuremonitor
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - azuremonitor
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - azuremonitor
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-warn}
+    metrics:
+      address: "0.0.0.0:8888"

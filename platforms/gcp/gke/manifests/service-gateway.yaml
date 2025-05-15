@@ -1,0 +1,58 @@
+# Service for OpenTelemetry Collector Gateway on GKE
+# Exposes OTLP gRPC and HTTP endpoints for agents to send telemetry
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-gateway
+  namespace: ${OTEL_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: observability
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: health
+      port: 13133
+      targetPort: 13133
+      protocol: TCP
+
+---
+# Headless service for direct pod-to-pod communication (load balancing aware)
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-gateway-headless
+  namespace: ${OTEL_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: observability
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: otel-gateway
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP

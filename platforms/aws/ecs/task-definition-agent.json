@@ -1,0 +1,166 @@
+{
+  "family": "${ECS_TASK_FAMILY:-otel-agent-sidecar}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "${ECS_TASK_CPU:-512}",
+  "memory": "${ECS_TASK_MEMORY:-1024}",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "application",
+      "image": "${APP_IMAGE}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": ${APP_PORT:-8080},
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "OTEL_EXPORTER_OTLP_ENDPOINT",
+          "value": "http://localhost:4317"
+        },
+        {
+          "name": "OTEL_SERVICE_NAME",
+          "value": "${OTEL_SERVICE_NAME}"
+        },
+        {
+          "name": "OTEL_RESOURCE_ATTRIBUTES",
+          "value": "deployment.environment=${ENVIRONMENT:-production},service.version=${SERVICE_VERSION:-unknown}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "APP_DB_PASSWORD",
+          "valueFrom": "${SSM_DB_PASSWORD_ARN:-arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/app/db/password}"
+        },
+        {
+          "name": "APP_API_KEY",
+          "valueFrom": "${SSM_API_KEY_ARN:-arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/app/api/key}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${CW_APP_LOG_GROUP:-/ecs/${OTEL_SERVICE_NAME}/application}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "app",
+          "awslogs-create-group": "true"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:${APP_PORT:-8080}/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "dependsOn": [
+        {
+          "containerName": "otel-sidecar",
+          "condition": "HEALTHY"
+        }
+      ]
+    },
+    {
+      "name": "otel-sidecar",
+      "image": "otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_VERSION:-0.98.0}",
+      "essential": true,
+      "command": ["--config", "/etc/otel/config.yaml"],
+      "portMappings": [
+        {
+          "containerPort": 4317,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 4318,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 8888,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 13133,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "OTEL_SERVICE_NAME",
+          "value": "${OTEL_SERVICE_NAME}"
+        },
+        {
+          "name": "OTEL_GATEWAY_ENDPOINT",
+          "value": "${OTEL_GATEWAY_ENDPOINT}"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "${ENVIRONMENT:-production}"
+        },
+        {
+          "name": "SERVICE_VERSION",
+          "value": "${SERVICE_VERSION:-unknown}"
+        },
+        {
+          "name": "OTEL_LOG_LEVEL",
+          "value": "${OTEL_LOG_LEVEL:-info}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "OTEL_EXPORTER_OTLP_HEADERS",
+          "valueFrom": "${SSM_OTEL_HEADERS_ARN:-arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/otel/exporter/headers}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${CW_OTEL_LOG_GROUP:-/ecs/${OTEL_SERVICE_NAME}/otel-sidecar}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "otel",
+          "awslogs-create-group": "true"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget --spider -q http://localhost:13133/ || exit 1"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "cpu": 128,
+      "memory": 256,
+      "memoryReservation": 128
+    }
+  ],
+  "volumes": [],
+  "tags": [
+    {
+      "key": "Platform",
+      "value": "aws"
+    },
+    {
+      "key": "Service",
+      "value": "ecs"
+    },
+    {
+      "key": "Component",
+      "value": "otel-agent"
+    },
+    {
+      "key": "Environment",
+      "value": "${ENVIRONMENT:-production}"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "opentelemetry"
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+# OpenTelemetry Collector Gateway Configuration - Linux
+# Centralized gateway that receives telemetry from agents, processes, and exports to backends.
+#
+# Environment Variables:
+#   BACKEND_OTLP_ENDPOINT  - Backend OTLP gRPC endpoint (e.g., tempo:4317, jaeger:4317)
+#   GATEWAY_OTLP_GRPC_PORT - Gateway OTLP gRPC listen port (default: 4317)
+#   GATEWAY_OTLP_HTTP_PORT - Gateway OTLP HTTP listen port (default: 4318)
+#   ENVIRONMENT            - Deployment environment (e.g., production, staging)
+#   SAMPLING_RATE          - Base sampling rate as percentage 0-100 (default: 10)
+#   MEMORY_LIMIT_MIB       - Memory limiter hard limit (default: 2048)
+#   MEMORY_SPIKE_MIB       - Memory limiter spike limit (default: 512)
+#   BATCH_TIMEOUT          - Batch export timeout (default: 10s)
+#   BATCH_SIZE             - Batch send size (default: 16384)
+
+receivers:
+  # OTLP receiver - accepts telemetry from all agents
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:${GATEWAY_OTLP_GRPC_PORT:-4317}
+        max_recv_msg_size_mib: 16
+        max_concurrent_streams: 256
+        keepalive:
+          server_parameters:
+            max_connection_idle: 60s
+            max_connection_age: 300s
+            max_connection_age_grace: 60s
+            time: 30s
+            timeout: 10s
+      http:
+        endpoint: 0.0.0.0:${GATEWAY_OTLP_HTTP_PORT:-4318}
+        max_request_body_size: 16777216
+
+processors:
+  # Batch processor - aggregate before export for efficiency
+  batch:
+    send_batch_size: ${BATCH_SIZE:-16384}
+    send_batch_max_size: 32768
+    timeout: ${BATCH_TIMEOUT:-10s}
+
+  # Memory limiter to protect the gateway process
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: ${MEMORY_LIMIT_MIB:-2048}
+    spike_limit_mib: ${MEMORY_SPIKE_MIB:-512}
+
+  # Tail-based sampling for traces using composite policy
+  tail_sampling:
+    decision_wait: 30s
+    num_traces: 100000
+    expected_new_traces_per_sec: 1000
+    policies:
+      # Composite policy combining multiple sampling strategies
+      - name: composite-policy
+        type: composite
+        composite:
+          max_total_spans_per_second: 5000
+          policy_order:
+            - always-sample-errors
+            - always-sample-slow
+            - rate-limit-default
+          composite_sub_policy:
+            # Always sample traces with errors
+            - name: always-sample-errors
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+            # Always sample slow traces (> 2 seconds)
+            - name: always-sample-slow
+              type: latency
+              latency:
+                threshold_ms: 2000
+            # Rate limit everything else
+            - name: rate-limit-default
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: ${SAMPLING_RATE:-10}
+          rate_allocation:
+            - policy: always-sample-errors
+              percent: 40
+            - policy: always-sample-slow
+              percent: 30
+            - policy: rate-limit-default
+              percent: 30
+
+  # Resource processor to tag gateway metadata
+  resource:
+    attributes:
+      - key: collector.type
+        value: gateway
+        action: upsert
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-unknown}
+        action: upsert
+
+exporters:
+  # Export all processed telemetry to the backend
+  otlp:
+    endpoint: ${BACKEND_OTLP_ENDPOINT}
+    tls:
+      insecure: ${OTLP_INSECURE:-true}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+      max_elapsed_time: 600s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage
+    timeout: 30s
+
+  # Debug exporter for troubleshooting
+  debug:
+    verbosity: basic
+    sampling_initial: 2
+    sampling_thereafter: 500
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  zpages:
+    endpoint: 0.0.0.0:55679
+  pprof:
+    endpoint: 0.0.0.0:1777
+  # Persistent queue storage
+  file_storage:
+    directory: /var/lib/otel-collector/storage
+    timeout: 10s
+    compaction:
+      on_start: true
+      directory: /var/lib/otel-collector/storage/compaction
+
+service:
+  extensions:
+    - health_check
+    - zpages
+    - pprof
+    - file_storage
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: info
+      output_paths:
+        - /var/log/otel-collector/gateway.log
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888

@@ -1,0 +1,163 @@
+# DaemonSet for OpenTelemetry Collector Agent on GKE
+# Runs one agent pod per node to collect host metrics, logs, and forward traces
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-agent
+  namespace: ${OTEL_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: otel-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-agent
+      app.kubernetes.io/component: agent
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-agent
+        app.kubernetes.io/component: agent
+        app.kubernetes.io/part-of: observability
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "${TELEMETRY_METRICS_PORT}"
+    spec:
+      serviceAccountName: ${OTEL_AGENT_SERVICE_ACCOUNT}
+      priorityClassName: system-node-critical
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: otel-agent
+          image: "otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_VERSION}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - "/otelcol-contrib"
+            - "--config=/conf/otel-agent.yaml"
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: GCP_PROJECT_ID
+              value: "${GCP_PROJECT_ID}"
+            - name: CLUSTER_NAME
+              value: "${CLUSTER_NAME}"
+            - name: ENVIRONMENT
+              value: "${ENVIRONMENT}"
+            - name: OTLP_GRPC_PORT
+              value: "${OTLP_GRPC_PORT}"
+            - name: OTLP_HTTP_PORT
+              value: "${OTLP_HTTP_PORT}"
+            - name: HOST_METRICS_INTERVAL
+              value: "${HOST_METRICS_INTERVAL}"
+            - name: KUBELET_STATS_INTERVAL
+              value: "${KUBELET_STATS_INTERVAL}"
+            - name: FILELOG_START_AT
+              value: "${FILELOG_START_AT}"
+            - name: BATCH_SIZE
+              value: "${BATCH_SIZE}"
+            - name: BATCH_MAX_SIZE
+              value: "${BATCH_MAX_SIZE}"
+            - name: BATCH_TIMEOUT
+              value: "${BATCH_TIMEOUT}"
+            - name: MEMORY_LIMITER_CHECK_INTERVAL
+              value: "${MEMORY_LIMITER_CHECK_INTERVAL}"
+            - name: MEMORY_LIMITER_LIMIT_MIB
+              value: "${MEMORY_LIMITER_LIMIT_MIB}"
+            - name: MEMORY_LIMITER_SPIKE_MIB
+              value: "${MEMORY_LIMITER_SPIKE_MIB}"
+            - name: GATEWAY_ENDPOINT
+              value: "${GATEWAY_ENDPOINT}"
+            - name: GATEWAY_TLS_INSECURE
+              value: "${GATEWAY_TLS_INSECURE}"
+            - name: HEALTH_CHECK_PORT
+              value: "${HEALTH_CHECK_PORT}"
+            - name: ZPAGES_PORT
+              value: "${ZPAGES_PORT}"
+            - name: OTEL_LOG_LEVEL
+              value: "${OTEL_LOG_LEVEL}"
+            - name: TELEMETRY_METRICS_PORT
+              value: "${TELEMETRY_METRICS_PORT}"
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              hostPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              hostPort: 4318
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "${AGENT_CPU_LIMIT}"
+              memory: "${AGENT_MEMORY_LIMIT}"
+            requests:
+              cpu: "${AGENT_CPU_REQUEST}"
+              memory: "${AGENT_MEMORY_REQUEST}"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+              readOnly: true
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: varlogcontainers
+              mountPath: /var/log/containers
+              readOnly: true
+            - name: hostfs
+              mountPath: /hostfs
+              readOnly: true
+              mountPropagation: HostToContainer
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+      volumes:
+        - name: config
+          configMap:
+            name: otel-agent-config
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
+        - name: varlogcontainers
+          hostPath:
+            path: /var/log/containers
+        - name: hostfs
+          hostPath:
+            path: /
