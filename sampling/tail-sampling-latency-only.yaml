@@ -1,0 +1,57 @@
+# =============================================================================
+# Tail Sampling: Latency-Only (Slow Traces)
+# =============================================================================
+# Keeps only traces where the root span duration exceeds a configurable
+# latency threshold. Useful for capturing slow requests for performance
+# analysis while dropping the high volume of fast, healthy requests.
+#
+# Environment Variables:
+#   LATENCY_THRESHOLD_MS  - Minimum latency in milliseconds to keep (default: 1000)
+#   EXPECTED_TRACES_PER_SEC - Expected ingest rate for internal sizing
+#
+# Merge with your base collector config:
+#   LATENCY_THRESHOLD_MS=2000 otelcol --config=base.yaml --config=tail-sampling-latency-only.yaml
+# =============================================================================
+
+processors:
+  tail_sampling:
+    # How long to wait for a trace to complete before making a sampling decision.
+    # Must be longer than your longest expected trace duration, otherwise
+    # the decision is made on an incomplete trace.
+    decision_wait: 10s
+
+    # Maximum number of traces held in memory awaiting a decision.
+    num_traces: 100000
+
+    # Expected new traces per second (for internal buffer sizing).
+    expected_new_traces_per_sec: ${EXPECTED_TRACES_PER_SEC:-10000}
+
+    policies:
+      # -----------------------------------------------------------------------
+      # Policy: Keep traces slower than the latency threshold
+      # -----------------------------------------------------------------------
+      # The latency policy evaluates the total end-to-end duration of the
+      # trace (root span duration). Only traces exceeding the threshold
+      # are kept.
+      #
+      # Common thresholds:
+      #   500ms  - Aggressive, catches moderate slowness
+      #   1000ms - Balanced default for most APIs
+      #   2000ms - Conservative, only very slow requests
+      #   5000ms - Critical-only, for batch/background jobs
+      - name: keep-slow-traces
+        type: latency
+        latency:
+          threshold_ms: ${LATENCY_THRESHOLD_MS:-1000}
+
+service:
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - batch
+      exporters:
+        - otlp/backend

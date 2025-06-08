@@ -1,0 +1,63 @@
+# =============================================================================
+# Tail Sampling: Error-Only
+# =============================================================================
+# Keeps only traces that contain errors or exceptions.
+# This dramatically reduces trace volume while ensuring every failed request
+# is captured for debugging.
+#
+# Merge with your base collector config:
+#   otelcol --config=base.yaml --config=tail-sampling-error-only.yaml
+# =============================================================================
+
+processors:
+  tail_sampling:
+    # How long to wait for a trace to complete before making a sampling decision.
+    # Traces still accumulating spans after this window will be evaluated
+    # with whatever spans have arrived.
+    decision_wait: 10s
+
+    # Maximum number of traces held in memory awaiting a decision.
+    # Size this based on your traces-per-second * decision_wait.
+    # Example: 10,000 traces/sec * 10s = 100,000
+    num_traces: 100000
+
+    # Expected number of new traces per second (used for internal sizing).
+    expected_new_traces_per_sec: ${EXPECTED_TRACES_PER_SEC:-10000}
+
+    policies:
+      # -----------------------------------------------------------------------
+      # Policy 1: Keep traces where any span has an ERROR status
+      # -----------------------------------------------------------------------
+      # Matches spans where the OpenTelemetry status code is set to ERROR.
+      # This catches any explicitly marked failures from instrumentation.
+      - name: keep-status-error
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # -----------------------------------------------------------------------
+      # Policy 2: Keep traces containing exception events
+      # -----------------------------------------------------------------------
+      # Catches traces where an exception was recorded as a span event
+      # (e.g., via span.recordException() in the SDK), even if the span
+      # status was not explicitly set to ERROR.
+      - name: keep-exception-events
+        type: string_attribute
+        string_attribute:
+          key: exception.type
+          values:
+            - ".*"
+          enabled_regex_matching: true
+
+service:
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - batch
+      exporters:
+        - otlp/backend

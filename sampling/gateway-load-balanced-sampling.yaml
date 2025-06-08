@@ -1,0 +1,307 @@
+# =============================================================================
+# Gateway Load-Balanced Tail Sampling: 3-Tier Architecture
+# =============================================================================
+#
+# ARCHITECTURE OVERVIEW
+# =====================
+#
+# The fundamental challenge with tail sampling is that ALL spans belonging
+# to the same trace must be evaluated by the SAME collector instance.
+# If spans for trace ABC arrive at different collectors, each collector
+# only sees a partial trace and cannot make a correct sampling decision.
+#
+# Solution: a 3-tier topology with trace-ID-aware load balancing.
+#
+#   +----------+   +----------+   +----------+
+#   |  Agent 1 |   |  Agent 2 |   |  Agent 3 |    TIER 1: Agents
+#   | (no smpl)|   | (no smpl)|   | (no smpl)|    Deployed per-node/pod
+#   +----+-----+   +----+-----+   +----+-----+    Collect and forward
+#        |              |              |
+#        v              v              v
+#   +------------------------------------------+
+#   |         Load Balancer Collector           |   TIER 2: Load Balancer
+#   |    (routes by traceID -> gateway)         |   Routes all spans for a
+#   |    loadbalancing exporter                 |   given trace to the same
+#   |    routing_key: traceID                   |   gateway instance
+#   +----+----------------+--------------------+
+#        |                |
+#        v                v
+#   +----------+    +----------+
+#   | Gateway 1|    | Gateway 2|                    TIER 3: Gateways
+#   | (tail    |    | (tail    |                    Apply tail sampling with
+#   |  sample) |    |  sample) |                    complete trace context
+#   +----+-----+    +----+-----+
+#        |               |
+#        v               v
+#   +------------------------------------------+
+#   |           Tracing Backend                 |
+#   |    (Jaeger / Tempo / X-Ray / etc.)        |
+#   +------------------------------------------+
+#
+# This file contains THREE separate configs. Deploy each tier with its own
+# config file extracted from the appropriate section below.
+#
+# =============================================================================
+
+
+# #############################################################################
+#
+#   TIER 1: AGENT CONFIG
+#
+#   Deploy: one per node, VM, or Kubernetes pod (as a sidecar or DaemonSet).
+#   Role:   receive telemetry from application SDKs and forward to the
+#           load balancer layer. NO sampling here -- just collect and ship.
+#
+# #############################################################################
+
+# --- Begin Agent Config (save as: agent-config.yaml) ---
+
+# agent:
+#   receivers:
+#     otlp:
+#       protocols:
+#         grpc:
+#           endpoint: 0.0.0.0:${AGENT_OTLP_GRPC_PORT:-4317}
+#         http:
+#           endpoint: 0.0.0.0:${AGENT_OTLP_HTTP_PORT:-4318}
+#
+#   processors:
+#     # Memory limiter prevents the agent from consuming unbounded memory.
+#     memory_limiter:
+#       check_interval: 1s
+#       limit_mib: ${AGENT_MEMORY_LIMIT_MIB:-512}
+#       spike_limit_mib: ${AGENT_MEMORY_SPIKE_MIB:-128}
+#
+#     # Batch spans before sending to reduce network overhead.
+#     batch:
+#       send_batch_size: 1024
+#       send_batch_max_size: 2048
+#       timeout: 5s
+#
+#     # Add resource attributes identifying this agent's node.
+#     resource:
+#       attributes:
+#         - key: collector.tier
+#           value: agent
+#           action: upsert
+#
+#   exporters:
+#     # Forward all traces to the load balancer tier via OTLP/gRPC.
+#     otlp/loadbalancer:
+#       endpoint: ${LOADBALANCER_ENDPOINT:-loadbalancer:4317}
+#       tls:
+#         insecure: ${OTLP_INSECURE:-true}
+#       retry_on_failure:
+#         enabled: true
+#         initial_interval: 5s
+#         max_interval: 30s
+#       sending_queue:
+#         enabled: true
+#         num_consumers: 10
+#         queue_size: 5000
+#
+#   service:
+#     pipelines:
+#       traces:
+#         receivers:
+#           - otlp
+#         processors:
+#           - memory_limiter
+#           - resource
+#           - batch
+#         exporters:
+#           - otlp/loadbalancer
+
+# --- End Agent Config ---
+
+
+# #############################################################################
+#
+#   TIER 2: LOAD BALANCER CONFIG
+#
+#   Deploy: 1-3 instances behind a standard L4 load balancer (or Kubernetes
+#           Service). Stateless -- can be scaled horizontally.
+#   Role:   receive traces from agents and route them to gateway instances
+#           using consistent hashing on the trace ID. This ensures all spans
+#           for a given trace land on the same gateway.
+#
+# #############################################################################
+
+# --- Begin Load Balancer Config (save as: loadbalancer-config.yaml) ---
+
+# loadbalancer:
+#   receivers:
+#     otlp:
+#       protocols:
+#         grpc:
+#           endpoint: 0.0.0.0:${LB_OTLP_GRPC_PORT:-4317}
+#         http:
+#           endpoint: 0.0.0.0:${LB_OTLP_HTTP_PORT:-4318}
+#
+#   processors:
+#     memory_limiter:
+#       check_interval: 1s
+#       limit_mib: ${LB_MEMORY_LIMIT_MIB:-1024}
+#       spike_limit_mib: ${LB_MEMORY_SPIKE_MIB:-256}
+#
+#   exporters:
+#     # The loadbalancing exporter is the key component of this tier.
+#     # It hashes the trace ID and routes all spans for a given trace
+#     # to the same backend (gateway) instance.
+#     loadbalancing:
+#       # routing_key: traceID ensures all spans for one trace go to
+#       # the same gateway, which is REQUIRED for correct tail sampling.
+#       routing_key: traceID
+#
+#       protocol:
+#         otlp:
+#           tls:
+#             insecure: ${OTLP_INSECURE:-true}
+#           timeout: 10s
+#
+#       resolver:
+#         # ---------------------------------------------------------------
+#         # Option A: Static list of gateway endpoints.
+#         # Use this for simple deployments or VMs.
+#         # ---------------------------------------------------------------
+#         # static:
+#         #   hostnames:
+#         #     - ${GATEWAY_HOST_1:-gateway-1:4317}
+#         #     - ${GATEWAY_HOST_2:-gateway-2:4317}
+#         #     - ${GATEWAY_HOST_3:-gateway-3:4317}
+#
+#         # ---------------------------------------------------------------
+#         # Option B: DNS-based discovery (recommended for Kubernetes).
+#         # Point to a headless Service that returns individual pod IPs.
+#         # The exporter will re-resolve periodically to pick up new pods.
+#         # ---------------------------------------------------------------
+#         dns:
+#           hostname: ${GATEWAY_DNS_HOSTNAME:-gateway-headless.observability.svc.cluster.local}
+#           port: ${GATEWAY_OTLP_GRPC_PORT:-4317}
+#           interval: 5s
+#
+#   service:
+#     pipelines:
+#       traces:
+#         receivers:
+#           - otlp
+#         processors:
+#           - memory_limiter
+#         exporters:
+#           - loadbalancing
+
+# --- End Load Balancer Config ---
+
+
+# #############################################################################
+#
+#   TIER 3: GATEWAY CONFIG
+#
+#   Deploy: 2+ instances behind the load balancer's consistent hash ring.
+#           Use a Kubernetes headless Service or static host list so the
+#           load balancer can discover individual instances.
+#   Role:   receive trace-ID-routed spans from the load balancer, buffer
+#           complete traces, apply tail sampling decisions, and export
+#           sampled traces to the tracing backend.
+#
+#   IMPORTANT: Gateway instances are STATEFUL with respect to in-flight
+#   traces. Scaling up/down will cause some traces to be split across
+#   instances during the transition. Scale gradually and during low-traffic
+#   windows when possible.
+#
+# #############################################################################
+
+# --- Begin Gateway Config (save as: gateway-config.yaml) ---
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:${GATEWAY_OTLP_GRPC_PORT:-4317}
+      http:
+        endpoint: 0.0.0.0:${GATEWAY_OTLP_HTTP_PORT:-4318}
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: ${GATEWAY_MEMORY_LIMIT_MIB:-4096}
+    spike_limit_mib: ${GATEWAY_MEMORY_SPIKE_MIB:-512}
+
+  # -------------------------------------------------------------------------
+  # Tail sampling on the gateway: this is where the actual decisions happen.
+  # Because the load balancer routes by trace ID, each gateway instance
+  # receives ALL spans for the traces assigned to it, enabling correct
+  # tail-sampling decisions.
+  # -------------------------------------------------------------------------
+  tail_sampling:
+    # Wait for the trace to complete. Set this longer than your longest
+    # expected trace duration.
+    decision_wait: ${DECISION_WAIT:-30s}
+
+    # Buffer size. Gateways typically handle a fraction of total traffic
+    # (total / number of gateways), so size accordingly.
+    num_traces: ${NUM_TRACES:-200000}
+    expected_new_traces_per_sec: ${EXPECTED_TRACES_PER_SEC:-5000}
+
+    policies:
+      # Always keep errors
+      - name: keep-errors
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # Always keep slow traces
+      - name: keep-slow-traces
+        type: latency
+        latency:
+          threshold_ms: ${LATENCY_THRESHOLD_MS:-2000}
+
+      # Probabilistic fallback for healthy traffic
+      - name: probabilistic-sample
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: ${SAMPLING_RATE:-10}
+
+  # Batch after sampling to optimize export efficiency.
+  batch:
+    send_batch_size: 2048
+    send_batch_max_size: 4096
+    timeout: 5s
+
+exporters:
+  # Export sampled traces to your tracing backend.
+  otlp/backend:
+    endpoint: ${BACKEND_ENDPOINT:-tempo:4317}
+    tls:
+      insecure: ${OTLP_INSECURE:-true}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 20
+      queue_size: 10000
+
+service:
+  # Telemetry for the gateway collector itself.
+  telemetry:
+    logs:
+      level: ${LOG_LEVEL:-info}
+    metrics:
+      address: 0.0.0.0:${GATEWAY_METRICS_PORT:-8888}
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - batch
+      exporters:
+        - otlp/backend
+
+# --- End Gateway Config ---

@@ -1,0 +1,65 @@
+# =============================================================================
+# Head-Based Probabilistic Sampling
+# =============================================================================
+# The simplest and most lightweight sampling strategy. Decisions are made
+# at the START of a trace (hence "head-based") using a deterministic hash
+# of the trace ID. This means:
+#
+#   - No memory overhead: no need to buffer complete traces
+#   - Consistent decisions: the same trace ID always gets the same decision
+#     across all collector instances (thanks to the fixed hash_seed)
+#   - Predictable cost: output volume = input volume * sampling_percentage / 100
+#
+# Trade-off vs Tail Sampling:
+#   Head sampling is cheap and simple but CANNOT make decisions based on
+#   trace outcome (errors, latency). You will miss the same percentage of
+#   errors as healthy traces. Use tail sampling if you need error/latency
+#   awareness. Use head sampling when you just need to reduce volume
+#   uniformly and affordably.
+#
+# Environment Variables:
+#   SAMPLING_PERCENTAGE - Percentage of traces to keep, 0-100 (default: 10)
+#
+# Merge with your base collector config:
+#   SAMPLING_PERCENTAGE=25 otelcol --config=base.yaml --config=head-sampling-probabilistic.yaml
+# =============================================================================
+
+processors:
+  probabilistic_sampler:
+    # -------------------------------------------------------------------------
+    # sampling_percentage: What fraction of traces to keep.
+    #
+    # Examples:
+    #   100  = keep everything (no sampling)
+    #   50   = keep half
+    #   10   = keep 10% (good starting point for most production workloads)
+    #   1    = keep 1% (for extremely high-volume services)
+    #   0.1  = keep 0.1% (for services doing 100k+ traces/sec)
+    # -------------------------------------------------------------------------
+    sampling_percentage: ${SAMPLING_PERCENTAGE:-10}
+
+    # -------------------------------------------------------------------------
+    # hash_seed: Fixed seed for the trace ID hashing function.
+    #
+    # IMPORTANT: All collector instances in your fleet MUST use the same
+    # hash_seed. If they don't, different collectors will make different
+    # sampling decisions for the same trace, resulting in broken/partial
+    # traces in your backend.
+    #
+    # Pick any non-zero integer and keep it consistent across your fleet.
+    # Changing this value will change WHICH traces are sampled (but the
+    # percentage stays the same).
+    # -------------------------------------------------------------------------
+    hash_seed: 22
+
+service:
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - probabilistic_sampler
+        - batch
+      exporters:
+        - otlp/backend

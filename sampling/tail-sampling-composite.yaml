@@ -1,0 +1,155 @@
+# =============================================================================
+# Tail Sampling: Composite (Production-Ready)
+# =============================================================================
+# The most common production tail-sampling configuration. Uses a composite
+# policy that combines multiple sampling strategies with explicit rate
+# allocation. This ensures:
+#
+#   1. ALL errors are captured (never miss a failure)
+#   2. ALL slow requests are captured (performance debugging)
+#   3. Critical endpoints are always sampled (business-critical paths)
+#   4. Remaining traffic is sampled probabilistically to control cost
+#
+# How Composite Policies Work:
+#   - Each sub-policy has a "max_total_spans_per_second" budget
+#   - Policies are evaluated in order; the FIRST matching policy wins
+#   - The "always_sample" rate means "100% of traces matching this policy"
+#   - The probabilistic fallback catches everything else at a reduced rate
+#   - max_total_spans_per_second caps the total output regardless of policy
+#
+# Environment Variables:
+#   SAMPLING_RATE           - Fallback sampling percentage (default: 10)
+#   MAX_SPANS_PER_SECOND    - Global output cap (default: 500)
+#   EXPECTED_TRACES_PER_SEC - Expected ingest rate for sizing
+#
+# Merge with your base collector config:
+#   SAMPLING_RATE=5 otelcol --config=base.yaml --config=tail-sampling-composite.yaml
+# =============================================================================
+
+processors:
+  tail_sampling:
+    # Time to wait before evaluating a trace. Set this to be longer than
+    # your longest expected trace so all spans arrive before the decision.
+    decision_wait: 10s
+
+    # Maximum traces held in memory. Size = traces/sec * decision_wait.
+    num_traces: 100000
+
+    # Expected new traces per second (for internal buffer pre-allocation).
+    expected_new_traces_per_sec: ${EXPECTED_TRACES_PER_SEC:-10000}
+
+    policies:
+      # =====================================================================
+      # COMPOSITE POLICY
+      # =====================================================================
+      # Wraps multiple sub-policies into a single evaluation with rate
+      # budgets. This is the recommended approach for production because
+      # it gives you fine-grained control over what gets sampled and how
+      # much throughput each category is allowed.
+      - name: composite-policy
+        type: composite
+        composite:
+          # -----------------------------------------------------------------
+          # Global output cap: no more than this many spans/sec total across
+          # ALL sub-policies. This is your cost-control knob.
+          # -----------------------------------------------------------------
+          max_total_spans_per_second: ${MAX_SPANS_PER_SECOND:-500}
+
+          # -----------------------------------------------------------------
+          # Policy evaluation order matters. The first matching policy wins.
+          # Structure: errors first, then latency, then business-critical
+          # endpoints, then probabilistic fallback for everything else.
+          # -----------------------------------------------------------------
+          policy_order:
+            - always-sample-errors
+            - always-sample-slow-traces
+            - always-sample-critical-endpoints
+            - probabilistic-fallback
+
+          composite_sub_policy:
+            # ---------------------------------------------------------------
+            # Sub-Policy 1: Always keep error traces (100%)
+            # ---------------------------------------------------------------
+            # Never drop a trace that contains an error. This is the most
+            # important policy -- you always want to see failures.
+            - name: always-sample-errors
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+
+            # ---------------------------------------------------------------
+            # Sub-Policy 2: Always keep slow traces (100%)
+            # ---------------------------------------------------------------
+            # Keep any trace where the end-to-end duration exceeds 2 seconds.
+            # These are your performance outliers and are critical for
+            # identifying latency regressions, timeouts, and bottlenecks.
+            - name: always-sample-slow-traces
+              type: latency
+              latency:
+                threshold_ms: 2000
+
+            # ---------------------------------------------------------------
+            # Sub-Policy 3: Always keep critical endpoint traces (100%)
+            # ---------------------------------------------------------------
+            # Certain endpoints are business-critical and should always be
+            # traced regardless of error or latency. Customize the values
+            # list with your own critical paths.
+            - name: always-sample-critical-endpoints
+              type: string_attribute
+              string_attribute:
+                key: http.route
+                values:
+                  - /api/checkout
+                  - /api/payment
+                  - /api/order
+                enabled_regex_matching: false
+
+            # ---------------------------------------------------------------
+            # Sub-Policy 4: Probabilistic fallback for everything else
+            # ---------------------------------------------------------------
+            # All traces that don't match the above policies are sampled
+            # at a configurable rate. Default 10% means 1 in 10 "normal"
+            # traces are kept, which is usually enough for baseline
+            # visibility into healthy traffic patterns.
+            - name: probabilistic-fallback
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: ${SAMPLING_RATE:-10}
+
+          # -----------------------------------------------------------------
+          # Rate allocation: how to distribute the max_total_spans_per_second
+          # budget across sub-policies. These are percentages of the budget.
+          #
+          # Errors and slow traces get generous allocations to ensure they
+          # are never dropped due to rate limiting. The probabilistic
+          # fallback gets the remainder.
+          # -----------------------------------------------------------------
+          rate_allocation:
+            # Errors can use up to 30% of the spans/sec budget
+            - policy: always-sample-errors
+              percent: 30
+
+            # Slow traces can use up to 25% of the budget
+            - policy: always-sample-slow-traces
+              percent: 25
+
+            # Critical endpoints can use up to 20% of the budget
+            - policy: always-sample-critical-endpoints
+              percent: 20
+
+            # Everything else (probabilistic) gets the remaining 25%
+            - policy: probabilistic-fallback
+              percent: 25
+
+service:
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - batch
+      exporters:
+        - otlp/backend
