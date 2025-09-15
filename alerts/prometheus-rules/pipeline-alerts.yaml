@@ -1,0 +1,138 @@
+groups:
+  - name: telemetry-pipeline-health
+    interval: 30s
+    rules:
+      # ---------------------------------------------------------------------------
+      # TelemetryPipelineNoData - No spans received for an extended period
+      # ---------------------------------------------------------------------------
+      - alert: TelemetryPipelineNoData
+        expr: >-
+          sum(rate(otelcol_receiver_accepted_spans{job=~"otel-collector.*"}[5m])) == 0
+          and
+          sum(otelcol_receiver_accepted_spans{job=~"otel-collector.*"}) > 0
+        for: 10m
+        labels:
+          severity: critical
+          team: platform-observability
+        annotations:
+          summary: "Telemetry pipeline has stopped receiving spans"
+          description: >-
+            No spans have been received by any OTel Collector instance in the
+            past 10 minutes, despite having previously received data. This
+            indicates a complete pipeline failure. Application traces are being
+            lost. Immediate investigation of collector ingress, network
+            connectivity, and application instrumentation is required.
+          runbook_url: "https://runbooks.example.com/telemetry-pipeline/no-data"
+
+      # ---------------------------------------------------------------------------
+      # TelemetryPipelineHighLatency - Export latency P99 exceeds threshold
+      # ---------------------------------------------------------------------------
+      - alert: TelemetryPipelineHighLatency
+        expr: >-
+          histogram_quantile(0.99,
+            sum by (le, exporter) (
+              rate(otelcol_exporter_send_latency_bucket{job=~"otel-collector.*"}[5m])
+            )
+          ) > 5000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "Telemetry pipeline export latency is high (exporter={{ $labels.exporter }})"
+          description: >-
+            The P99 export latency for exporter {{ $labels.exporter }} has
+            exceeded 5 seconds for the past 5 minutes (current P99:
+            {{ $value | humanizeDuration }}). High export latency causes queue
+            buildup and may eventually lead to data loss. Investigate the
+            downstream backend (Jaeger, Prometheus, Loki) for performance
+            issues or network problems.
+          runbook_url: "https://runbooks.example.com/telemetry-pipeline/high-latency"
+
+      # ---------------------------------------------------------------------------
+      # TelemetryPipelineSamplingTooAggressive - Sampling rate below threshold
+      # ---------------------------------------------------------------------------
+      - alert: TelemetryPipelineSamplingTooAggressive
+        expr: >-
+          (
+            sum(rate(otelcol_processor_dropped_spans{processor="tail_sampling", job=~"otel-collector.*"}[5m]))
+            /
+            (
+              sum(rate(otelcol_processor_dropped_spans{processor="tail_sampling", job=~"otel-collector.*"}[5m]))
+              +
+              sum(rate(otelcol_processor_accepted_spans{processor="tail_sampling", job=~"otel-collector.*"}[5m]))
+            )
+          ) > 0.95
+        for: 15m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "Tail sampling is dropping more than 95% of spans"
+          description: >-
+            The tail sampling processor is currently dropping
+            {{ $value | humanizePercentage }} of all spans, which exceeds the
+            95% threshold. This has been sustained for 15 minutes. While
+            sampling is expected, excessively aggressive sampling may cause
+            loss of important traces including errors and high-latency requests.
+            Review the tail sampling policies to ensure critical traces are
+            being retained.
+          runbook_url: "https://runbooks.example.com/telemetry-pipeline/sampling-aggressive"
+
+      # ---------------------------------------------------------------------------
+      # TelemetryPipelineBackpressure - Queue consistently above 70%
+      # ---------------------------------------------------------------------------
+      - alert: TelemetryPipelineBackpressure
+        expr: >-
+          avg_over_time(
+            (
+              otelcol_exporter_queue_size{job=~"otel-collector.*"}
+              /
+              otelcol_exporter_queue_capacity{job=~"otel-collector.*"}
+            )[10m:]
+          ) > 0.7
+        for: 10m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "Telemetry pipeline backpressure detected (exporter={{ $labels.exporter }}, instance={{ $labels.instance }})"
+          description: >-
+            The exporter queue for {{ $labels.exporter }} on instance
+            {{ $labels.instance }} has been averaging above 70% capacity for
+            the past 10 minutes (current avg:
+            {{ $value | humanizePercentage }}). This indicates sustained
+            backpressure in the pipeline. The downstream backend may be slow,
+            the collector may be under-provisioned, or the data volume may have
+            increased beyond expected levels. If not addressed, this will
+            eventually lead to data loss when the queue reaches capacity.
+          runbook_url: "https://runbooks.example.com/telemetry-pipeline/backpressure"
+
+      # ---------------------------------------------------------------------------
+      # TelemetryPipelineDataLoss - Gap between received and exported data
+      # ---------------------------------------------------------------------------
+      - alert: TelemetryPipelineDataLoss
+        expr: >-
+          (
+            sum(rate(otelcol_receiver_accepted_spans{job=~"otel-collector.*"}[5m]))
+            -
+            sum(rate(otelcol_exporter_sent_spans{job=~"otel-collector.*"}[5m]))
+          )
+          /
+          sum(rate(otelcol_receiver_accepted_spans{job=~"otel-collector.*"}[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform-observability
+        annotations:
+          summary: "Telemetry pipeline is losing data - received vs exported gap detected"
+          description: >-
+            More than 5% of received spans are not being exported
+            (current loss rate: {{ $value | humanizePercentage }}). This has
+            persisted for 5 minutes. Data is being lost somewhere in the
+            pipeline due to drops, failures, or queue overflow.
+            Received rate: {{ with printf `sum(rate(otelcol_receiver_accepted_spans{job=~"otel-collector.*"}[5m]))` | query }}{{ . | first | value | humanize }}{{ end }} spans/sec.
+            Exported rate: {{ with printf `sum(rate(otelcol_exporter_sent_spans{job=~"otel-collector.*"}[5m]))` | query }}{{ . | first | value | humanize }}{{ end }} spans/sec.
+            Immediate investigation required to prevent further data loss.
+          runbook_url: "https://runbooks.example.com/telemetry-pipeline/data-loss"

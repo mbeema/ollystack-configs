@@ -1,0 +1,163 @@
+groups:
+  - name: otel-collector-health
+    interval: 30s
+    rules:
+      # ---------------------------------------------------------------------------
+      # OtelCollectorDown - Collector instance is unreachable
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorDown
+        expr: up{job=~"otel-collector.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector instance {{ $labels.instance }} is down"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) has been unreachable for more than 5 minutes.
+            No telemetry data is being collected or exported from this instance.
+          runbook_url: "https://runbooks.example.com/otel-collector/collector-down"
+
+      # ---------------------------------------------------------------------------
+      # OtelCollectorHighMemory - Memory usage exceeds 80% of limit
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorHighMemory
+        expr: >-
+          otelcol_process_memory_rss{job=~"otel-collector.*"}
+          /
+          otelcol_process_runtime_total_alloc_bytes{job=~"otel-collector.*"}
+          > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector {{ $labels.instance }} memory usage is high"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) has been using more than 80% of its memory
+            limit for the past 10 minutes. Current RSS:
+            {{ $value | humanize1024 }}B.
+            Consider scaling the collector or increasing memory limits.
+          runbook_url: "https://runbooks.example.com/otel-collector/high-memory"
+
+      # ---------------------------------------------------------------------------
+      # OtelCollectorDroppedSpans - Spans are being dropped by processors
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorDroppedSpans
+        expr: rate(otelcol_processor_dropped_spans{job=~"otel-collector.*"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector {{ $labels.instance }} is dropping spans"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) processor {{ $labels.processor }} has been
+            dropping spans at a rate of {{ $value | humanize }} spans/sec for
+            the past 5 minutes. This may indicate pipeline saturation,
+            misconfigured processors, or resource exhaustion.
+          runbook_url: "https://runbooks.example.com/otel-collector/dropped-spans"
+
+      # ---------------------------------------------------------------------------
+      # OtelCollectorDroppedMetrics - Metric points are being dropped
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorDroppedMetrics
+        expr: rate(otelcol_processor_dropped_metric_points{job=~"otel-collector.*"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector {{ $labels.instance }} is dropping metric points"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) processor {{ $labels.processor }} has been
+            dropping metric points at a rate of {{ $value | humanize }} pts/sec
+            for the past 5 minutes. This may lead to gaps in metric data and
+            unreliable dashboards or alerts.
+          runbook_url: "https://runbooks.example.com/otel-collector/dropped-metrics"
+
+      # ---------------------------------------------------------------------------
+      # OtelCollectorDroppedLogs - Log records are being dropped
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorDroppedLogs
+        expr: rate(otelcol_processor_dropped_log_records{job=~"otel-collector.*"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector {{ $labels.instance }} is dropping log records"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) processor {{ $labels.processor }} has been
+            dropping log records at a rate of {{ $value | humanize }} logs/sec
+            for the past 5 minutes. Check processor configuration and pipeline
+            capacity.
+          runbook_url: "https://runbooks.example.com/otel-collector/dropped-logs"
+
+      # ---------------------------------------------------------------------------
+      # OtelCollectorExportFailures - Export operations are failing
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorExportFailures
+        expr: rate(otelcol_exporter_send_failed_spans{job=~"otel-collector.*"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector {{ $labels.instance }} is failing to export spans"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) exporter {{ $labels.exporter }} has been
+            failing to send spans at a rate of {{ $value | humanize }} spans/sec
+            for the past 5 minutes. This indicates that the downstream backend
+            is unreachable or rejecting data. Immediate investigation required.
+          runbook_url: "https://runbooks.example.com/otel-collector/export-failures"
+
+      # ---------------------------------------------------------------------------
+      # OtelCollectorQueueAlmostFull - Exporter queue nearing capacity
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorQueueAlmostFull
+        expr: >-
+          otelcol_exporter_queue_size{job=~"otel-collector.*"}
+          /
+          otelcol_exporter_queue_capacity{job=~"otel-collector.*"}
+          > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector {{ $labels.instance }} exporter queue is almost full"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) exporter {{ $labels.exporter }} queue is at
+            {{ $value | humanizePercentage }} capacity for the past 5 minutes.
+            If the queue fills completely, data will be dropped. Consider scaling
+            the collector, increasing queue size, or investigating the
+            downstream backend for slowness.
+          runbook_url: "https://runbooks.example.com/otel-collector/queue-full"
+
+      # ---------------------------------------------------------------------------
+      # OtelCollectorHighCPU - CPU usage is excessively high
+      # ---------------------------------------------------------------------------
+      - alert: OtelCollectorHighCPU
+        expr: rate(otelcol_process_cpu_seconds{job=~"otel-collector.*"}[5m]) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          team: platform-observability
+        annotations:
+          summary: "OTel Collector {{ $labels.instance }} CPU usage is high"
+          description: >-
+            The OpenTelemetry Collector instance {{ $labels.instance }}
+            (job={{ $labels.job }}) has been using more than 90% CPU for the
+            past 10 minutes (current: {{ $value | humanizePercentage }}).
+            This may lead to increased latency, dropped data, or OOM kills.
+            Consider scaling the collector horizontally or reducing the
+            processing load.
+          runbook_url: "https://runbooks.example.com/otel-collector/high-cpu"
