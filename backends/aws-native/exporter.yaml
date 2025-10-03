@@ -1,0 +1,72 @@
+# AWS Native Exporter Configuration
+# Sends traces to X-Ray, logs to CloudWatch Logs, metrics to CloudWatch via EMF
+#
+# Required environment variables:
+#   AWS_REGION              - AWS region
+#   AWS_CW_LOG_GROUP        - CloudWatch Logs log group name (default: /otel/collector/logs)
+#   AWS_CW_LOG_STREAM       - CloudWatch Logs log stream name (default: otel-logs)
+#   AWS_CW_NAMESPACE        - CloudWatch Metrics namespace (default: OTel/Application)
+#
+# Note: Requires the OpenTelemetry Collector Contrib distribution
+# Authentication: Uses the standard AWS credential chain (env vars, IAM role, etc.)
+
+exporters:
+  # AWS X-Ray exporter for distributed traces
+  awsxray:
+    region: ${AWS_REGION}
+    indexed_attributes:
+      - otel.resource.service.name
+      - otel.resource.deployment.environment
+    resource_arn: ""
+    role_arn: ""
+
+  # CloudWatch Logs exporter for logs
+  awscloudwatchlogs:
+    region: ${AWS_REGION}
+    log_group_name: ${AWS_CW_LOG_GROUP:-/otel/collector/logs}
+    log_stream_name: ${AWS_CW_LOG_STREAM:-otel-logs}
+    log_retention: 30
+    raw_log: false
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+  # CloudWatch EMF exporter for metrics
+  awsemf:
+    region: ${AWS_REGION}
+    namespace: ${AWS_CW_NAMESPACE:-OTel/Application}
+    log_group_name: /metrics/${AWS_CW_NAMESPACE:-OTel/Application}
+    log_stream_name: otel-metrics
+    resource_to_telemetry_conversion:
+      enabled: true
+    dimension_rollup_option: NoDimensionRollup
+    metric_declarations:
+      - dimensions:
+          - - service.name
+          - - service.name
+            - deployment.environment
+        metric_name_selectors:
+          - "^http\\.server\\..*"
+          - "^http\\.client\\..*"
+          - "^rpc\\..*"
+          - "^db\\..*"
+      - dimensions:
+          - - service.name
+        metric_name_selectors:
+          - "^process\\..*"
+          - "^runtime\\..*"
+
+service:
+  pipelines:
+    traces:
+      exporters: [awsxray]
+    metrics:
+      exporters: [awsemf]
+    logs:
+      exporters: [awscloudwatchlogs]

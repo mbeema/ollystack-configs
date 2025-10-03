@@ -1,0 +1,59 @@
+# Grafana Cloud Exporter Configuration
+# Sends traces to Tempo, metrics to Mimir, and logs to Loki via OTLP/HTTP
+#
+# Required environment variables:
+#   GRAFANA_OTLP_ENDPOINT  - OTLP gateway host (e.g., otlp-gateway-prod-us-east-0.grafana.net)
+#   GRAFANA_INSTANCE_ID    - Grafana Cloud instance ID
+#   GRAFANA_API_KEY        - API key with MetricsPublisher role
+
+exporters:
+  # Traces exporter (Tempo)
+  otlphttp/grafana-traces:
+    endpoint: https://${GRAFANA_OTLP_ENDPOINT}/otlp
+    headers:
+      Authorization: "Basic ${GRAFANA_BASIC_AUTH}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Metrics exporter (Mimir)
+  otlphttp/grafana-metrics:
+    endpoint: https://${GRAFANA_OTLP_ENDPOINT}/otlp
+    headers:
+      Authorization: "Basic ${GRAFANA_BASIC_AUTH}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Logs exporter (Loki)
+  otlphttp/grafana-logs:
+    endpoint: https://${GRAFANA_OTLP_ENDPOINT}/otlp
+    headers:
+      Authorization: "Basic ${GRAFANA_BASIC_AUTH}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/grafana-traces]
+    metrics:
+      exporters: [otlphttp/grafana-metrics]
+    logs:
+      exporters: [otlphttp/grafana-logs]

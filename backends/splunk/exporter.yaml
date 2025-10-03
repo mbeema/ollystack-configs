@@ -1,0 +1,77 @@
+# Splunk Exporter Configuration
+# Sends data via HEC to Splunk Enterprise/Cloud and via OTLP to Splunk Observability Cloud
+#
+# Required environment variables:
+#   SPLUNK_HEC_ENDPOINT        - Splunk HEC endpoint URL
+#   SPLUNK_HEC_TOKEN           - Splunk HEC token
+#   SPLUNK_HEC_SOURCE          - Event source identifier (default: otel)
+#   SPLUNK_HEC_SOURCETYPE      - Event sourcetype (default: otel)
+#   SPLUNK_HEC_INDEX           - Target Splunk index (default: otel_events)
+#   SPLUNK_O11Y_ACCESS_TOKEN   - Splunk Observability Cloud ingest token
+#   SPLUNK_O11Y_REALM          - Splunk Observability Cloud realm (e.g., us0)
+#
+# Note: Splunk HEC exporter requires the OpenTelemetry Collector Contrib distribution
+
+exporters:
+  # Splunk HEC exporter for logs and events
+  splunk_hec/logs:
+    endpoint: ${SPLUNK_HEC_ENDPOINT}
+    token: ${SPLUNK_HEC_TOKEN}
+    source: ${SPLUNK_HEC_SOURCE:-otel}
+    sourcetype: ${SPLUNK_HEC_SOURCETYPE:-otel:logs}
+    index: ${SPLUNK_HEC_INDEX:-otel_events}
+    max_connections: 20
+    disable_compression: false
+    timeout: 10s
+    tls:
+      insecure_skip_verify: false
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+  # Splunk HEC exporter for metrics
+  splunk_hec/metrics:
+    endpoint: ${SPLUNK_HEC_ENDPOINT}
+    token: ${SPLUNK_HEC_TOKEN}
+    source: ${SPLUNK_HEC_SOURCE:-otel}
+    sourcetype: ${SPLUNK_HEC_SOURCETYPE:-otel:metrics}
+    index: ${SPLUNK_HEC_INDEX:-otel_events}
+    max_connections: 20
+    disable_compression: false
+    timeout: 10s
+    tls:
+      insecure_skip_verify: false
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # OTLP exporter to Splunk Observability Cloud (traces + metrics)
+  otlphttp/splunk-o11y:
+    endpoint: https://ingest.${SPLUNK_O11Y_REALM}.signalfx.com
+    headers:
+      X-SF-Token: ${SPLUNK_O11Y_ACCESS_TOKEN}
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/splunk-o11y]
+    metrics:
+      exporters: [splunk_hec/metrics, otlphttp/splunk-o11y]
+    logs:
+      exporters: [splunk_hec/logs]

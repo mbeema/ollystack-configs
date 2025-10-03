@@ -1,0 +1,46 @@
+# Google Cloud Exporter Configuration
+# Sends traces to Cloud Trace, metrics to Cloud Monitoring, logs to Cloud Logging
+#
+# Required environment variables:
+#   GCP_PROJECT_ID                  - Google Cloud project ID
+#   GOOGLE_APPLICATION_CREDENTIALS  - Path to service account key (non-GCP only)
+#
+# Note: Requires the OpenTelemetry Collector Contrib distribution
+# Authentication: On GCP (GCE, GKE, Cloud Run), credentials are automatic via metadata server
+
+exporters:
+  googlecloud:
+    project: ${GCP_PROJECT_ID}
+
+    trace:
+      attribute_mappings: []
+
+    metric:
+      prefix: workload.googleapis.com
+      resource_filters: []
+      known_domains: []
+
+    log:
+      default_log_name: opentelemetry
+
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [googlecloud]
+    metrics:
+      exporters: [googlecloud]
+    logs:
+      exporters: [googlecloud]

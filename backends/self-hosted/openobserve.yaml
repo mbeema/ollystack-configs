@@ -1,0 +1,41 @@
+# OpenObserve Exporter Configuration
+# Sends traces, metrics, and logs to OpenObserve via OTLP/HTTP
+#
+# Required environment variables:
+#   OPENOBSERVE_ENDPOINT  - OpenObserve base URL (default: openobserve:5080)
+#   OPENOBSERVE_USER      - OpenObserve username for basic auth
+#   OPENOBSERVE_PASSWORD  - OpenObserve password for basic auth
+
+exporters:
+  otlphttp/openobserve:
+    endpoint: ${OPENOBSERVE_ENDPOINT:-http://openobserve:5080}/api/default
+    auth:
+      authenticator: basicauth/openobserve
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+extensions:
+  basicauth/openobserve:
+    client_auth:
+      username: ${OPENOBSERVE_USER}
+      password: ${OPENOBSERVE_PASSWORD}
+
+service:
+  extensions: [basicauth/openobserve]
+  pipelines:
+    traces:
+      exporters: [otlphttp/openobserve]
+    metrics:
+      exporters: [otlphttp/openobserve]
+    logs:
+      exporters: [otlphttp/openobserve]

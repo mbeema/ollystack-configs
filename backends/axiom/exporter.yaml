@@ -1,0 +1,76 @@
+# Axiom Exporter Configuration
+# Sends traces, metrics, and logs to Axiom via OTLP/HTTP
+#
+# Required environment variables:
+#   AXIOM_API_TOKEN  - Axiom API token
+#   AXIOM_DATASET    - Axiom dataset name for data ingestion
+
+exporters:
+  # OTLP HTTP exporter to Axiom for traces
+  otlphttp/axiom-traces:
+    endpoint: https://api.axiom.co
+    headers:
+      Authorization: "Bearer ${AXIOM_API_TOKEN}"
+      X-Axiom-Dataset: "${AXIOM_DATASET}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+  # OTLP HTTP exporter to Axiom for metrics
+  otlphttp/axiom-metrics:
+    endpoint: https://api.axiom.co
+    headers:
+      Authorization: "Bearer ${AXIOM_API_TOKEN}"
+      X-Axiom-Dataset: "${AXIOM_DATASET}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+  # OTLP HTTP exporter to Axiom for logs
+  otlphttp/axiom-logs:
+    endpoint: https://api.axiom.co
+    headers:
+      Authorization: "Bearer ${AXIOM_API_TOKEN}"
+      X-Axiom-Dataset: "${AXIOM_DATASET}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/axiom-traces]
+    metrics:
+      exporters: [otlphttp/axiom-metrics]
+    logs:
+      exporters: [otlphttp/axiom-logs]

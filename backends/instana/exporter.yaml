@@ -1,0 +1,34 @@
+# IBM Instana Exporter Configuration
+# Sends traces, metrics, and logs to Instana via OTLP/HTTP
+#
+# Required environment variables:
+#   INSTANA_OTLP_ENDPOINT  - Instana OTLP endpoint (SaaS or local agent)
+#   INSTANA_AGENT_KEY      - Instana agent key for authentication
+
+exporters:
+  otlphttp/instana:
+    endpoint: ${INSTANA_OTLP_ENDPOINT}
+    headers:
+      x-instana-key: "${INSTANA_AGENT_KEY}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/instana]
+    metrics:
+      exporters: [otlphttp/instana]
+    logs:
+      exporters: [otlphttp/instana]

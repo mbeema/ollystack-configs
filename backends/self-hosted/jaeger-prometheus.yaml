@@ -1,0 +1,47 @@
+# Jaeger + Prometheus Exporter Configuration
+# Sends traces to Jaeger via OTLP/gRPC and metrics to Prometheus via Remote Write
+#
+# Required environment variables:
+#   JAEGER_ENDPOINT       - Jaeger OTLP gRPC endpoint (default: jaeger:4317)
+#   PROMETHEUS_ENDPOINT   - Prometheus Remote Write URL (default: http://prometheus:9090/api/v1/write)
+
+exporters:
+  # OTLP gRPC exporter to Jaeger for traces
+  otlp/jaeger:
+    endpoint: ${JAEGER_ENDPOINT:-jaeger:4317}
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+  # Prometheus Remote Write exporter for metrics
+  prometheusremotewrite:
+    endpoint: ${PROMETHEUS_ENDPOINT:-http://prometheus:9090/api/v1/write}
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlp/jaeger]
+    metrics:
+      exporters: [prometheusremotewrite]

@@ -1,0 +1,30 @@
+# SigNoz Exporter Configuration
+# Sends traces, metrics, and logs to SigNoz via OTLP/gRPC
+#
+# Required environment variables:
+#   SIGNOZ_ENDPOINT  - SigNoz OTLP gRPC endpoint (default: signoz-otel-collector:4317)
+
+exporters:
+  otlp/signoz:
+    endpoint: ${SIGNOZ_ENDPOINT:-signoz-otel-collector:4317}
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlp/signoz]
+    metrics:
+      exporters: [otlp/signoz]
+    logs:
+      exporters: [otlp/signoz]

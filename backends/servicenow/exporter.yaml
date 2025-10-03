@@ -1,0 +1,34 @@
+# ServiceNow Cloud Observability (Lightstep) Exporter Configuration
+# Sends traces, metrics, and logs to ServiceNow Cloud Observability via OTLP/HTTP
+#
+# Required environment variables:
+#   SERVICENOW_OTLP_ENDPOINT  - ServiceNow Cloud Observability OTLP endpoint
+#   LIGHTSTEP_ACCESS_TOKEN     - Lightstep/ServiceNow access token
+
+exporters:
+  otlphttp/servicenow:
+    endpoint: ${SERVICENOW_OTLP_ENDPOINT}
+    headers:
+      Authorization: "Bearer ${LIGHTSTEP_ACCESS_TOKEN}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/servicenow]
+    metrics:
+      exporters: [otlphttp/servicenow]
+    logs:
+      exporters: [otlphttp/servicenow]

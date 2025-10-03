@@ -1,0 +1,60 @@
+# Datadog Exporter Configuration
+# Sends traces, metrics, and logs to Datadog using the native exporter
+#
+# Required environment variables:
+#   DD_API_KEY  - Datadog API key
+#   DD_SITE     - Datadog site (defaults to datadoghq.com)
+#
+# Note: Requires the OpenTelemetry Collector Contrib distribution
+
+exporters:
+  datadog:
+    api:
+      key: ${DD_API_KEY}
+      site: ${DD_SITE:-datadoghq.com}
+      fail_on_invalid_key: true
+
+    traces:
+      endpoint: https://trace.agent.${DD_SITE:-datadoghq.com}
+      span_name_as_resource_name: true
+      span_name_remappings:
+        instrumentation:express.request: express
+        instrumentation:http.request: http.client
+      trace_buffer: 500
+      ignore_resources: []
+
+    metrics:
+      endpoint: https://api.${DD_SITE:-datadoghq.com}
+      resource_attributes_as_tags: true
+      instrumentation_scope_metadata_as_tags: true
+      histograms:
+        mode: distributions
+        send_aggregation_metrics: true
+      sums:
+        cumulative_monotonic_mode: to_delta
+        initial_cumulative_monotonic_value: auto
+
+    host_metadata:
+      enabled: true
+      hostname_source: config_or_system
+      tags: []
+
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+service:
+  pipelines:
+    traces:
+      exporters: [datadog]
+    metrics:
+      exporters: [datadog]
+    logs:
+      exporters: [datadog]

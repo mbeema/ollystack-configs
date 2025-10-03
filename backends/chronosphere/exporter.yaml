@@ -1,0 +1,53 @@
+# Chronosphere Exporter Configuration
+# Sends traces via OTLP/HTTP and metrics via Prometheus Remote Write to Chronosphere
+#
+# Required environment variables:
+#   CHRONOSPHERE_OTLP_ENDPOINT          - Chronosphere OTLP endpoint for traces
+#   CHRONOSPHERE_REMOTE_WRITE_ENDPOINT  - Chronosphere Prometheus Remote Write endpoint for metrics
+#   CHRONOSPHERE_API_TOKEN              - Chronosphere API token
+
+exporters:
+  # OTLP HTTP exporter to Chronosphere for traces
+  otlphttp/chronosphere:
+    endpoint: ${CHRONOSPHERE_OTLP_ENDPOINT}
+    headers:
+      API-Token: "${CHRONOSPHERE_API_TOKEN}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+  # Prometheus Remote Write exporter to Chronosphere for metrics
+  prometheusremotewrite/chronosphere:
+    endpoint: ${CHRONOSPHERE_REMOTE_WRITE_ENDPOINT}
+    headers:
+      API-Token: "${CHRONOSPHERE_API_TOKEN}"
+    tls:
+      insecure: false
+    resource_to_telemetry_conversion:
+      enabled: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/chronosphere]
+    metrics:
+      exporters: [prometheusremotewrite/chronosphere]

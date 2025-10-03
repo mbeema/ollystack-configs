@@ -1,0 +1,47 @@
+# VictoriaMetrics Exporter Configuration
+# Sends metrics via Prometheus Remote Write and traces via OTLP/gRPC
+#
+# Required environment variables:
+#   VICTORIAMETRICS_ENDPOINT  - VictoriaMetrics write endpoint (default: victoriametrics:8428)
+#   VICTORIATRACES_ENDPOINT   - VictoriaTraces OTLP gRPC endpoint (default: victoriatraces:4317)
+
+exporters:
+  # Prometheus Remote Write exporter to VictoriaMetrics for metrics
+  prometheusremotewrite/victoriametrics:
+    endpoint: ${VICTORIAMETRICS_ENDPOINT:-http://victoriametrics:8428}/api/v1/write
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+  # OTLP gRPC exporter to VictoriaTraces for traces
+  otlp/victoriatraces:
+    endpoint: ${VICTORIATRACES_ENDPOINT:-victoriatraces:4317}
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlp/victoriatraces]
+    metrics:
+      exporters: [prometheusremotewrite/victoriametrics]

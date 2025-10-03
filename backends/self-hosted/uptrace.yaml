@@ -1,0 +1,33 @@
+# Uptrace Exporter Configuration
+# Sends traces, metrics, and logs to Uptrace via OTLP/gRPC
+#
+# Required environment variables:
+#   UPTRACE_ENDPOINT  - Uptrace OTLP gRPC endpoint (default: uptrace:14317)
+#   UPTRACE_DSN       - Uptrace DSN for project authentication
+
+exporters:
+  otlp/uptrace:
+    endpoint: ${UPTRACE_ENDPOINT:-uptrace:14317}
+    headers:
+      uptrace-dsn: "${UPTRACE_DSN}"
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlp/uptrace]
+    metrics:
+      exporters: [otlp/uptrace]
+    logs:
+      exporters: [otlp/uptrace]

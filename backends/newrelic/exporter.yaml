@@ -1,0 +1,33 @@
+# New Relic Exporter Configuration
+# Sends traces, metrics, and logs to New Relic via OTLP/HTTP
+#
+# Required environment variables:
+#   NEW_RELIC_API_KEY  - New Relic Ingest License key
+
+exporters:
+  otlphttp/newrelic:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      Api-Key: ${NEW_RELIC_API_KEY}
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/newrelic]
+    metrics:
+      exporters: [otlphttp/newrelic]
+    logs:
+      exporters: [otlphttp/newrelic]

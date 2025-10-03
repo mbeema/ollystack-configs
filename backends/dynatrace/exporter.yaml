@@ -1,0 +1,34 @@
+# Dynatrace Exporter Configuration
+# Sends traces, metrics, and logs to Dynatrace via OTLP/HTTP
+#
+# Required environment variables:
+#   DYNATRACE_OTLP_ENDPOINT  - Dynatrace OTLP API endpoint
+#   DYNATRACE_API_TOKEN      - Dynatrace API token with ingest scopes
+
+exporters:
+  otlphttp/dynatrace:
+    endpoint: ${DYNATRACE_OTLP_ENDPOINT}
+    headers:
+      Authorization: "Api-Token ${DYNATRACE_API_TOKEN}"
+    tls:
+      insecure: false
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/dynatrace]
+    metrics:
+      exporters: [otlphttp/dynatrace]
+    logs:
+      exporters: [otlphttp/dynatrace]

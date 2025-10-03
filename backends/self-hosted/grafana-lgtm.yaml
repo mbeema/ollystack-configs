@@ -1,0 +1,67 @@
+# Grafana LGTM Stack Exporter Configuration
+# Sends traces to Tempo, metrics to Mimir, and logs to Loki
+# LGTM = Loki (logs) + Grafana (visualization) + Tempo (traces) + Mimir (metrics)
+#
+# Required environment variables:
+#   TEMPO_ENDPOINT  - Tempo OTLP gRPC endpoint (default: tempo:4317)
+#   MIMIR_ENDPOINT  - Mimir remote write base URL (default: mimir:9009)
+#   LOKI_ENDPOINT   - Loki OTLP HTTP base URL (default: loki:3100)
+
+exporters:
+  # OTLP gRPC exporter to Tempo for traces
+  otlp/tempo:
+    endpoint: ${TEMPO_ENDPOINT:-tempo:4317}
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+  # Prometheus Remote Write exporter to Mimir for metrics
+  prometheusremotewrite/mimir:
+    endpoint: ${MIMIR_ENDPOINT:-http://mimir:9009}/api/v1/push
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+
+  # OTLP HTTP exporter to Loki for logs (Loki supports native OTLP ingestion)
+  otlphttp/loki:
+    endpoint: ${LOKI_ENDPOINT:-http://loki:3100}/otlp
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    timeout: 30s
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlp/tempo]
+    metrics:
+      exporters: [prometheusremotewrite/mimir]
+    logs:
+      exporters: [otlphttp/loki]
