@@ -1,0 +1,285 @@
+# =============================================================================
+# OpenTelemetry Collector - Agent Base Configuration
+# =============================================================================
+# This is the foundation configuration for an OTel Collector running in agent
+# mode (typically as a DaemonSet sidecar or per-node agent). It provides:
+#
+#   - OTLP ingestion over gRPC (:4317) and HTTP (:4318)
+#   - Memory-safe processing with memory_limiter and batch processor
+#   - Self-observability via health_check, pprof, and zpages extensions
+#   - Pipeline stubs for traces, metrics, and logs
+#
+# Environment variable parameterization (${VAR:-default}) allows tuning
+# without modifying this file. Override values via environment variables or
+# Kubernetes ConfigMap/Secret references.
+#
+# Usage:
+#   This file is intended to be used as a base layer. Overlay environment-
+#   specific configs (receivers, exporters, additional processors) on top
+#   using the --config flag's multi-file support:
+#
+#     otelcol --config=otel-agent-base.yaml --config=otel-agent-env.yaml
+# =============================================================================
+
+# =============================================================================
+# Receivers
+# =============================================================================
+# Receivers define ingestion endpoints. The OTLP receiver is the standard
+# entry point supporting traces, metrics, and logs over both gRPC and HTTP.
+# =============================================================================
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: ${OTEL_RECEIVER_OTLP_GRPC_ENDPOINT:-0.0.0.0:4317}
+        max_recv_msg_size_mib: ${OTEL_RECEIVER_OTLP_GRPC_MAX_MSG_SIZE_MIB:-4}
+        # TLS configuration - uncomment and configure for production
+        # tls:
+        #   cert_file: ${OTEL_TLS_CERT_FILE}
+        #   key_file: ${OTEL_TLS_KEY_FILE}
+        #   ca_file: ${OTEL_TLS_CA_FILE}
+        #   client_ca_file: ${OTEL_TLS_CLIENT_CA_FILE}
+        keepalive:
+          server_parameters:
+            max_connection_idle: ${OTEL_GRPC_MAX_CONN_IDLE:-11s}
+            max_connection_age: ${OTEL_GRPC_MAX_CONN_AGE:-60s}
+            max_connection_age_grace: ${OTEL_GRPC_MAX_CONN_AGE_GRACE:-5s}
+            time: ${OTEL_GRPC_KEEPALIVE_TIME:-30s}
+            timeout: ${OTEL_GRPC_KEEPALIVE_TIMEOUT:-10s}
+          enforcement_policy:
+            min_time: ${OTEL_GRPC_KEEPALIVE_MIN_TIME:-10s}
+            permit_without_stream: true
+      http:
+        endpoint: ${OTEL_RECEIVER_OTLP_HTTP_ENDPOINT:-0.0.0.0:4318}
+        # CORS configuration for browser-based instrumentation
+        cors:
+          allowed_origins:
+            - ${OTEL_CORS_ALLOWED_ORIGIN:-"*"}
+          allowed_headers:
+            - "Content-Type"
+            - "X-Requested-With"
+          max_age: 7200
+        # TLS configuration - uncomment and configure for production
+        # tls:
+        #   cert_file: ${OTEL_TLS_CERT_FILE}
+        #   key_file: ${OTEL_TLS_KEY_FILE}
+
+# =============================================================================
+# Processors
+# =============================================================================
+# Processors transform telemetry data in the pipeline. The order matters:
+# memory_limiter should always be first to protect the collector from OOM,
+# followed by any transformation processors, with batch as the last processor
+# to optimize export efficiency.
+# =============================================================================
+processors:
+  # ---------------------------------------------------------------------------
+  # Memory Limiter
+  # ---------------------------------------------------------------------------
+  # Prevents OOM by monitoring the collector's memory usage and applying
+  # back-pressure when limits are approached. Must be the FIRST processor
+  # in every pipeline. check_interval controls how often memory is sampled.
+  # ---------------------------------------------------------------------------
+  memory_limiter:
+    check_interval: ${OTEL_MEMORY_CHECK_INTERVAL:-1s}
+    limit_mib: ${OTEL_MEMORY_LIMIT_MIB:-512}
+    spike_limit_mib: ${OTEL_MEMORY_SPIKE_MIB:-128}
+    # limit_percentage and spike_limit_percentage can be used instead of
+    # fixed MiB values when running in containers with cgroup memory limits:
+    # limit_percentage: ${OTEL_MEMORY_LIMIT_PERCENTAGE:-80}
+    # spike_limit_percentage: ${OTEL_MEMORY_SPIKE_PERCENTAGE:-25}
+
+  # ---------------------------------------------------------------------------
+  # Batch Processor
+  # ---------------------------------------------------------------------------
+  # Batches telemetry data before export to reduce network overhead and
+  # improve throughput. Should be the LAST processor in the pipeline.
+  #
+  #   timeout:         Maximum time to wait before sending a batch
+  #   send_batch_size: Target number of spans/metrics/logs per batch
+  #   send_batch_max_size: Hard upper limit per batch (0 = no limit)
+  # ---------------------------------------------------------------------------
+  batch:
+    timeout: ${OTEL_BATCH_TIMEOUT:-200ms}
+    send_batch_size: ${OTEL_BATCH_SEND_SIZE:-8192}
+    send_batch_max_size: ${OTEL_BATCH_SEND_MAX_SIZE:-0}
+
+  # ---------------------------------------------------------------------------
+  # Resource Detection (stub - override in environment-specific config)
+  # ---------------------------------------------------------------------------
+  # Automatically detects resource attributes from the runtime environment.
+  # Uncomment and configure for your deployment target.
+  # ---------------------------------------------------------------------------
+  # resourcedetection:
+  #   detectors:
+  #     - env
+  #     - system
+  #     - docker
+  #     - ec2
+  #     - ecs
+  #     - gcp
+  #     - azure
+  #   timeout: 5s
+  #   override: false
+
+# =============================================================================
+# Extensions
+# =============================================================================
+# Extensions provide auxiliary services: health checking for orchestrators,
+# pprof for profiling, and zpages for in-process debugging.
+# =============================================================================
+extensions:
+  # ---------------------------------------------------------------------------
+  # Health Check
+  # ---------------------------------------------------------------------------
+  # Exposes an HTTP health endpoint for liveness and readiness probes.
+  # Kubernetes probes should target this endpoint.
+  # ---------------------------------------------------------------------------
+  health_check:
+    endpoint: ${OTEL_HEALTH_CHECK_ENDPOINT:-0.0.0.0:13133}
+    path: "/health"
+    check_collector_pipeline:
+      enabled: true
+      interval: ${OTEL_HEALTH_CHECK_INTERVAL:-5m}
+      exporter_failure_threshold: 5
+
+  # ---------------------------------------------------------------------------
+  # pprof
+  # ---------------------------------------------------------------------------
+  # Go pprof profiling endpoint for debugging performance issues.
+  # Disable or restrict access in hardened production environments.
+  # ---------------------------------------------------------------------------
+  pprof:
+    endpoint: ${OTEL_PPROF_ENDPOINT:-localhost:1777}
+    block_profile_fraction: ${OTEL_PPROF_BLOCK_FRACTION:-0}
+    mutex_profile_fraction: ${OTEL_PPROF_MUTEX_FRACTION:-0}
+
+  # ---------------------------------------------------------------------------
+  # zPages
+  # ---------------------------------------------------------------------------
+  # In-process diagnostics for tracing and RPC stats. Provides /debug/tracez
+  # and /debug/rpcz pages for live troubleshooting.
+  # ---------------------------------------------------------------------------
+  zpages:
+    endpoint: ${OTEL_ZPAGES_ENDPOINT:-localhost:55679}
+
+# =============================================================================
+# Exporters (stubs)
+# =============================================================================
+# Define destination exporters in environment-specific overlay configs.
+# A debug exporter is included here for development and troubleshooting.
+# =============================================================================
+exporters:
+  # ---------------------------------------------------------------------------
+  # Debug Exporter
+  # ---------------------------------------------------------------------------
+  # Outputs telemetry to the collector's log. Use verbosity "detailed" for
+  # development or "basic" for production troubleshooting.
+  # ---------------------------------------------------------------------------
+  debug:
+    verbosity: ${OTEL_DEBUG_VERBOSITY:-basic}
+    sampling_initial: ${OTEL_DEBUG_SAMPLING_INITIAL:-5}
+    sampling_thereafter: ${OTEL_DEBUG_SAMPLING_THEREAFTER:-200}
+
+  # ---------------------------------------------------------------------------
+  # OTLP Exporter (to gateway or backend)
+  # ---------------------------------------------------------------------------
+  # Forwards telemetry to the next collector tier (gateway) or directly to
+  # an OTLP-compatible backend.
+  # ---------------------------------------------------------------------------
+  otlp:
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-gateway:4317}
+    tls:
+      insecure: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      # cert_file: ${OTEL_EXPORTER_TLS_CERT_FILE}
+      # key_file: ${OTEL_EXPORTER_TLS_KEY_FILE}
+      # ca_file: ${OTEL_EXPORTER_TLS_CA_FILE}
+    sending_queue:
+      enabled: true
+      num_consumers: ${OTEL_EXPORTER_QUEUE_CONSUMERS:-10}
+      queue_size: ${OTEL_EXPORTER_QUEUE_SIZE:-5000}
+    retry_on_failure:
+      enabled: true
+      initial_interval: ${OTEL_EXPORTER_RETRY_INITIAL:-5s}
+      max_interval: ${OTEL_EXPORTER_RETRY_MAX:-30s}
+      max_elapsed_time: ${OTEL_EXPORTER_RETRY_MAX_ELAPSED:-300s}
+
+# =============================================================================
+# Service
+# =============================================================================
+# The service section ties everything together: which extensions to load,
+# which pipelines to run, and the collector's own telemetry configuration.
+# =============================================================================
+service:
+  extensions:
+    - health_check
+    - pprof
+    - zpages
+
+  # ---------------------------------------------------------------------------
+  # Telemetry - Collector self-observability
+  # ---------------------------------------------------------------------------
+  # Configures the collector's own metrics, logs, and traces.
+  # These are metrics ABOUT the collector, not the data flowing through it.
+  # ---------------------------------------------------------------------------
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+      # development: false
+      # encoding: json
+      # output_paths: ["stderr"]
+      # error_output_paths: ["stderr"]
+      # initial_fields:
+      #   service: otel-agent
+    metrics:
+      level: ${OTEL_METRICS_LEVEL:-normal}
+      address: ${OTEL_METRICS_ENDPOINT:-0.0.0.0:8888}
+      # readers:
+      #   - pull:
+      #       exporter:
+      #         prometheus:
+      #           host: ${OTEL_METRICS_PROMETHEUS_HOST:-0.0.0.0}
+      #           port: ${OTEL_METRICS_PROMETHEUS_PORT:-8888}
+
+  # ---------------------------------------------------------------------------
+  # Pipelines
+  # ---------------------------------------------------------------------------
+  # Each pipeline defines the flow: receivers -> processors -> exporters.
+  #
+  # IMPORTANT: memory_limiter MUST be the first processor in every pipeline
+  # to protect against OOM. batch should be the last processor to optimize
+  # export efficiency.
+  #
+  # Override or extend these pipelines in environment-specific overlay configs
+  # to add additional receivers, processors, or exporters.
+  # ---------------------------------------------------------------------------
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - otlp
+        # - debug  # Uncomment for troubleshooting
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - otlp
+        # - debug  # Uncomment for troubleshooting
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - otlp
+        # - debug  # Uncomment for troubleshooting

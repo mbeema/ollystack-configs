@@ -1,0 +1,395 @@
+# =============================================================================
+# OpenTelemetry Collector - Gateway Base Configuration
+# =============================================================================
+# This is the foundation configuration for an OTel Collector running in
+# gateway mode (typically as a centralized Deployment or StatefulSet). The
+# gateway tier aggregates telemetry from multiple agent collectors, applies
+# cross-node processing (tail sampling, service graph), and exports to
+# backend systems.
+#
+# Key differences from the agent configuration:
+#   - Higher memory limits (2048 MiB default vs 512 MiB for agents)
+#   - Larger batch sizes and longer timeouts for throughput optimization
+#   - Persistent sending queues for durability across restarts
+#   - retry_on_failure with exponential backoff for resilient exports
+#   - Designed for horizontal scaling behind a load balancer
+#
+# Environment variable parameterization (${VAR:-default}) allows tuning
+# without modifying this file. Override values via environment variables or
+# Kubernetes ConfigMap/Secret references.
+#
+# Usage:
+#   This file is intended to be used as a base layer. Overlay environment-
+#   specific configs on top using multi-file support:
+#
+#     otelcol --config=otel-gateway-base.yaml --config=otel-gateway-env.yaml
+# =============================================================================
+
+# =============================================================================
+# Receivers
+# =============================================================================
+# The gateway receives telemetry from agent collectors. OTLP is the primary
+# protocol. gRPC is preferred for agent-to-gateway communication due to its
+# efficiency and streaming capabilities.
+# =============================================================================
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: ${OTEL_RECEIVER_OTLP_GRPC_ENDPOINT:-0.0.0.0:4317}
+        max_recv_msg_size_mib: ${OTEL_RECEIVER_OTLP_GRPC_MAX_MSG_SIZE_MIB:-16}
+        max_concurrent_streams: ${OTEL_RECEIVER_GRPC_MAX_STREAMS:-100}
+        read_buffer_size: ${OTEL_RECEIVER_GRPC_READ_BUFFER:-524288}
+        write_buffer_size: ${OTEL_RECEIVER_GRPC_WRITE_BUFFER:-524288}
+        # TLS configuration - strongly recommended for production gateways
+        # tls:
+        #   cert_file: ${OTEL_TLS_CERT_FILE}
+        #   key_file: ${OTEL_TLS_KEY_FILE}
+        #   ca_file: ${OTEL_TLS_CA_FILE}
+        #   client_ca_file: ${OTEL_TLS_CLIENT_CA_FILE}
+        #   min_version: "1.2"
+        keepalive:
+          server_parameters:
+            max_connection_idle: ${OTEL_GRPC_MAX_CONN_IDLE:-30s}
+            max_connection_age: ${OTEL_GRPC_MAX_CONN_AGE:-300s}
+            max_connection_age_grace: ${OTEL_GRPC_MAX_CONN_AGE_GRACE:-10s}
+            time: ${OTEL_GRPC_KEEPALIVE_TIME:-30s}
+            timeout: ${OTEL_GRPC_KEEPALIVE_TIMEOUT:-10s}
+          enforcement_policy:
+            min_time: ${OTEL_GRPC_KEEPALIVE_MIN_TIME:-10s}
+            permit_without_stream: true
+      http:
+        endpoint: ${OTEL_RECEIVER_OTLP_HTTP_ENDPOINT:-0.0.0.0:4318}
+        max_request_body_size: ${OTEL_RECEIVER_HTTP_MAX_BODY_SIZE:-0}
+        cors:
+          allowed_origins:
+            - ${OTEL_CORS_ALLOWED_ORIGIN:-"*"}
+          allowed_headers:
+            - "Content-Type"
+            - "X-Requested-With"
+            - "Authorization"
+          max_age: 7200
+        # tls:
+        #   cert_file: ${OTEL_TLS_CERT_FILE}
+        #   key_file: ${OTEL_TLS_KEY_FILE}
+
+# =============================================================================
+# Processors
+# =============================================================================
+# Gateway processors are tuned for higher throughput with larger batches
+# and longer timeouts. The memory_limiter has higher thresholds to
+# accommodate the aggregation of telemetry from multiple agents.
+#
+# Processor ordering in pipelines:
+#   1. memory_limiter (always first - OOM protection)
+#   2. Transformation/enrichment processors
+#   3. Filtering/sampling processors
+#   4. batch (always last - export optimization)
+# =============================================================================
+processors:
+  # ---------------------------------------------------------------------------
+  # Memory Limiter
+  # ---------------------------------------------------------------------------
+  # Gateway-tuned memory limits. The gateway typically runs with more memory
+  # than agents since it aggregates data from multiple sources.
+  #
+  # For containerized deployments, consider using limit_percentage instead
+  # of limit_mib so the limiter scales with the container memory allocation.
+  # ---------------------------------------------------------------------------
+  memory_limiter:
+    check_interval: ${OTEL_MEMORY_CHECK_INTERVAL:-1s}
+    limit_mib: ${OTEL_MEMORY_LIMIT_MIB:-2048}
+    spike_limit_mib: ${OTEL_MEMORY_SPIKE_MIB:-512}
+    # Container-aware alternative (uncomment and remove limit_mib/spike_limit_mib):
+    # limit_percentage: ${OTEL_MEMORY_LIMIT_PERCENTAGE:-75}
+    # spike_limit_percentage: ${OTEL_MEMORY_SPIKE_PERCENTAGE:-20}
+
+  # ---------------------------------------------------------------------------
+  # Batch Processor
+  # ---------------------------------------------------------------------------
+  # Gateway-tuned batching with longer timeout and larger batch sizes for
+  # improved throughput. The 5s timeout allows for more efficient batching
+  # at the cost of slightly higher latency.
+  #
+  #   timeout:             Max wait before flushing a batch
+  #   send_batch_size:     Target batch size (triggers a send)
+  #   send_batch_max_size: Hard cap per batch (prevents oversized exports)
+  # ---------------------------------------------------------------------------
+  batch:
+    timeout: ${OTEL_BATCH_TIMEOUT:-5s}
+    send_batch_size: ${OTEL_BATCH_SEND_SIZE:-8192}
+    send_batch_max_size: ${OTEL_BATCH_SEND_MAX_SIZE:-16384}
+
+  # ---------------------------------------------------------------------------
+  # Batch Processor - Logs variant
+  # ---------------------------------------------------------------------------
+  # Separate batch configuration for logs which may have different throughput
+  # characteristics than traces and metrics.
+  # ---------------------------------------------------------------------------
+  batch/logs:
+    timeout: ${OTEL_BATCH_LOGS_TIMEOUT:-5s}
+    send_batch_size: ${OTEL_BATCH_LOGS_SEND_SIZE:-8192}
+    send_batch_max_size: ${OTEL_BATCH_LOGS_SEND_MAX_SIZE:-16384}
+
+  # ---------------------------------------------------------------------------
+  # Resource Detection (stub - override in environment-specific config)
+  # ---------------------------------------------------------------------------
+  # resourcedetection:
+  #   detectors:
+  #     - env
+  #     - system
+  #     - ec2
+  #     - ecs
+  #     - gcp
+  #     - azure
+  #   timeout: 5s
+  #   override: false
+
+  # ---------------------------------------------------------------------------
+  # K8s Attributes (stub - enable in Kubernetes deployments)
+  # ---------------------------------------------------------------------------
+  # k8sattributes:
+  #   auth_type: "serviceAccount"
+  #   passthrough: false
+  #   filter:
+  #     node_from_env_var: KUBE_NODE_NAME
+  #   extract:
+  #     metadata:
+  #       - k8s.namespace.name
+  #       - k8s.deployment.name
+  #       - k8s.statefulset.name
+  #       - k8s.daemonset.name
+  #       - k8s.cronjob.name
+  #       - k8s.job.name
+  #       - k8s.node.name
+  #       - k8s.pod.name
+  #       - k8s.pod.uid
+  #       - k8s.pod.start_time
+  #     labels:
+  #       - tag_name: app.label.component
+  #         key: app.kubernetes.io/component
+  #         from: pod
+
+# =============================================================================
+# Extensions
+# =============================================================================
+# Gateway extensions include all agent extensions plus persistent file storage
+# for durable sending queues that survive restarts.
+# =============================================================================
+extensions:
+  # ---------------------------------------------------------------------------
+  # Health Check
+  # ---------------------------------------------------------------------------
+  # HTTP health endpoint for orchestrator liveness/readiness probes and
+  # load balancer health checks.
+  # ---------------------------------------------------------------------------
+  health_check:
+    endpoint: ${OTEL_HEALTH_CHECK_ENDPOINT:-0.0.0.0:13133}
+    path: "/health"
+    check_collector_pipeline:
+      enabled: true
+      interval: ${OTEL_HEALTH_CHECK_INTERVAL:-5m}
+      exporter_failure_threshold: 5
+
+  # ---------------------------------------------------------------------------
+  # pprof
+  # ---------------------------------------------------------------------------
+  # Go pprof profiling endpoint. Restrict access in production via network
+  # policies or firewall rules (localhost binding by default).
+  # ---------------------------------------------------------------------------
+  pprof:
+    endpoint: ${OTEL_PPROF_ENDPOINT:-localhost:1777}
+    block_profile_fraction: ${OTEL_PPROF_BLOCK_FRACTION:-0}
+    mutex_profile_fraction: ${OTEL_PPROF_MUTEX_FRACTION:-0}
+
+  # ---------------------------------------------------------------------------
+  # zPages
+  # ---------------------------------------------------------------------------
+  # In-process diagnostics for live troubleshooting (/debug/tracez, /debug/rpcz).
+  # ---------------------------------------------------------------------------
+  zpages:
+    endpoint: ${OTEL_ZPAGES_ENDPOINT:-localhost:55679}
+
+  # ---------------------------------------------------------------------------
+  # File Storage
+  # ---------------------------------------------------------------------------
+  # Persistent storage backend for sending queues. Ensures telemetry data
+  # is not lost during collector restarts or transient backend failures.
+  # The storage directory should be backed by a persistent volume in
+  # Kubernetes (e.g., PersistentVolumeClaim).
+  # ---------------------------------------------------------------------------
+  file_storage/persistent_queue:
+    directory: ${OTEL_PERSISTENT_QUEUE_DIR:-/var/lib/otelcol/storage}
+    timeout: ${OTEL_PERSISTENT_QUEUE_TIMEOUT:-10s}
+    compaction:
+      directory: ${OTEL_PERSISTENT_QUEUE_COMPACTION_DIR:-/tmp/otelcol/compaction}
+      on_start: true
+      on_rebound: true
+      rebound_needed_threshold_mib: ${OTEL_PERSISTENT_QUEUE_COMPACTION_THRESHOLD_MIB:-100}
+      rebound_trigger_threshold_mib: ${OTEL_PERSISTENT_QUEUE_COMPACTION_TRIGGER_MIB:-10}
+
+# =============================================================================
+# Exporters
+# =============================================================================
+# Gateway exporters are configured with persistent sending queues and
+# retry-on-failure for reliable delivery to backends. Environment-specific
+# overlay configs should define the actual backend exporters.
+# =============================================================================
+exporters:
+  # ---------------------------------------------------------------------------
+  # Debug Exporter
+  # ---------------------------------------------------------------------------
+  debug:
+    verbosity: ${OTEL_DEBUG_VERBOSITY:-basic}
+    sampling_initial: ${OTEL_DEBUG_SAMPLING_INITIAL:-2}
+    sampling_thereafter: ${OTEL_DEBUG_SAMPLING_THEREAFTER:-500}
+
+  # ---------------------------------------------------------------------------
+  # OTLP gRPC Exporter (primary backend)
+  # ---------------------------------------------------------------------------
+  # Exports to an OTLP-compatible backend with persistent queuing and
+  # retry-on-failure for production resilience.
+  # ---------------------------------------------------------------------------
+  otlp:
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-backend:4317}
+    tls:
+      insecure: ${OTEL_EXPORTER_OTLP_INSECURE:-false}
+      # cert_file: ${OTEL_EXPORTER_TLS_CERT_FILE}
+      # key_file: ${OTEL_EXPORTER_TLS_KEY_FILE}
+      # ca_file: ${OTEL_EXPORTER_TLS_CA_FILE}
+    compression: ${OTEL_EXPORTER_OTLP_COMPRESSION:-gzip}
+    # --- Persistent Sending Queue ---
+    # Uses file_storage extension to persist the queue to disk, ensuring
+    # data survives collector restarts. queue_size defines the maximum
+    # number of batches held in the queue.
+    sending_queue:
+      enabled: true
+      num_consumers: ${OTEL_EXPORTER_QUEUE_CONSUMERS:-20}
+      queue_size: ${OTEL_EXPORTER_QUEUE_SIZE:-10000}
+      storage: file_storage/persistent_queue
+    # --- Retry on Failure ---
+    # Exponential backoff retry for transient export failures.
+    # max_elapsed_time caps total retry duration to prevent infinite retries.
+    retry_on_failure:
+      enabled: true
+      initial_interval: ${OTEL_EXPORTER_RETRY_INITIAL:-5s}
+      randomization_factor: ${OTEL_EXPORTER_RETRY_RANDOMIZATION:-0.5}
+      multiplier: ${OTEL_EXPORTER_RETRY_MULTIPLIER:-1.5}
+      max_interval: ${OTEL_EXPORTER_RETRY_MAX:-30s}
+      max_elapsed_time: ${OTEL_EXPORTER_RETRY_MAX_ELAPSED:-300s}
+
+  # ---------------------------------------------------------------------------
+  # OTLP HTTP Exporter (secondary/alternative backend)
+  # ---------------------------------------------------------------------------
+  otlp/http:
+    endpoint: ${OTEL_EXPORTER_OTLP_HTTP_ENDPOINT:-https://backend:4318}
+    tls:
+      insecure: ${OTEL_EXPORTER_OTLP_HTTP_INSECURE:-false}
+      # cert_file: ${OTEL_EXPORTER_TLS_CERT_FILE}
+      # key_file: ${OTEL_EXPORTER_TLS_KEY_FILE}
+      # ca_file: ${OTEL_EXPORTER_TLS_CA_FILE}
+    compression: ${OTEL_EXPORTER_OTLP_HTTP_COMPRESSION:-gzip}
+    headers:
+      Authorization: ${OTEL_EXPORTER_OTLP_HTTP_AUTH_HEADER:-""}
+    sending_queue:
+      enabled: true
+      num_consumers: ${OTEL_EXPORTER_HTTP_QUEUE_CONSUMERS:-20}
+      queue_size: ${OTEL_EXPORTER_HTTP_QUEUE_SIZE:-10000}
+      storage: file_storage/persistent_queue
+    retry_on_failure:
+      enabled: true
+      initial_interval: ${OTEL_EXPORTER_HTTP_RETRY_INITIAL:-5s}
+      randomization_factor: ${OTEL_EXPORTER_HTTP_RETRY_RANDOMIZATION:-0.5}
+      multiplier: ${OTEL_EXPORTER_HTTP_RETRY_MULTIPLIER:-1.5}
+      max_interval: ${OTEL_EXPORTER_HTTP_RETRY_MAX:-30s}
+      max_elapsed_time: ${OTEL_EXPORTER_HTTP_RETRY_MAX_ELAPSED:-300s}
+
+# =============================================================================
+# Service
+# =============================================================================
+# The service section ties everything together. The gateway includes the
+# file_storage extension for persistent queues and has higher resource
+# allocations for its self-telemetry.
+# =============================================================================
+service:
+  extensions:
+    - health_check
+    - pprof
+    - zpages
+    - file_storage/persistent_queue
+
+  # ---------------------------------------------------------------------------
+  # Telemetry - Collector self-observability
+  # ---------------------------------------------------------------------------
+  # Gateway telemetry is configured with higher detail since gateways are
+  # fewer in number and serve as critical aggregation points.
+  # ---------------------------------------------------------------------------
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+      encoding: ${OTEL_LOG_ENCODING:-json}
+      # output_paths: ["stderr"]
+      # error_output_paths: ["stderr"]
+      # initial_fields:
+      #   service: otel-gateway
+      #   environment: ${OTEL_ENVIRONMENT:-production}
+    metrics:
+      level: ${OTEL_METRICS_LEVEL:-detailed}
+      address: ${OTEL_METRICS_ENDPOINT:-0.0.0.0:8888}
+    # Uncomment to enable self-tracing for debugging the collector itself:
+    # traces:
+    #   processors:
+    #     - batch:
+    #         exporter:
+    #           otlp:
+    #             protocol: grpc/protobuf
+    #             endpoint: ${OTEL_SELF_TRACES_ENDPOINT:-localhost:4317}
+    resource:
+      service.name: ${OTEL_SERVICE_NAME:-otel-gateway}
+      service.namespace: ${OTEL_SERVICE_NAMESPACE:-ollystack}
+      service.version: ${OTEL_SERVICE_VERSION:-1.0.0}
+
+  # ---------------------------------------------------------------------------
+  # Pipelines
+  # ---------------------------------------------------------------------------
+  # Gateway pipelines aggregate telemetry from agents and forward to backends.
+  #
+  # IMPORTANT: memory_limiter MUST be the first processor in every pipeline.
+  # batch should be the last processor.
+  #
+  # Override or extend these pipelines in environment-specific overlay configs
+  # to add additional receivers, processors, or exporters.
+  # ---------------------------------------------------------------------------
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - otlp
+        # - otlp/http   # Uncomment for multi-backend export
+        # - debug        # Uncomment for troubleshooting
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - otlp
+        # - otlp/http   # Uncomment for multi-backend export
+        # - debug        # Uncomment for troubleshooting
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch/logs
+      exporters:
+        - otlp
+        # - otlp/http   # Uncomment for multi-backend export
+        # - debug        # Uncomment for troubleshooting
