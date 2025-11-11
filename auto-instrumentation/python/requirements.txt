@@ -1,0 +1,73 @@
+# =============================================================================
+# OpenTelemetry Python Auto-Instrumentation Dependencies
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Core OTel Packages
+# ---------------------------------------------------------------------------
+opentelemetry-api>=1.27.0
+opentelemetry-sdk>=1.27.0
+opentelemetry-semantic-conventions>=0.48b0
+
+# ---------------------------------------------------------------------------
+# OTLP Exporters
+# ---------------------------------------------------------------------------
+opentelemetry-exporter-otlp>=1.27.0
+opentelemetry-exporter-otlp-proto-grpc>=1.27.0
+opentelemetry-exporter-otlp-proto-http>=1.27.0
+
+# ---------------------------------------------------------------------------
+# Auto-Instrumentation Bootstrap Package
+# ---------------------------------------------------------------------------
+# Provides the `opentelemetry-instrument` CLI wrapper and the
+# `opentelemetry-bootstrap` tool that detects installed libraries
+# and installs matching instrumentation packages.
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation>=0.48b0
+
+# ---------------------------------------------------------------------------
+# Web Framework Instrumentations
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation-flask>=0.48b0
+opentelemetry-instrumentation-django>=0.48b0
+opentelemetry-instrumentation-fastapi>=0.48b0
+opentelemetry-instrumentation-starlette>=0.48b0
+
+# ---------------------------------------------------------------------------
+# HTTP Client Instrumentations
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation-requests>=0.48b0
+opentelemetry-instrumentation-urllib3>=0.48b0
+opentelemetry-instrumentation-aiohttp-client>=0.48b0
+opentelemetry-instrumentation-httpx>=0.48b0
+
+# ---------------------------------------------------------------------------
+# Database Instrumentations
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation-sqlalchemy>=0.48b0
+opentelemetry-instrumentation-psycopg2>=0.48b0
+opentelemetry-instrumentation-asyncpg>=0.48b0
+opentelemetry-instrumentation-pymongo>=0.48b0
+opentelemetry-instrumentation-dbapi>=0.48b0
+
+# ---------------------------------------------------------------------------
+# Cache / Message Queue Instrumentations
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation-redis>=0.48b0
+opentelemetry-instrumentation-celery>=0.48b0
+opentelemetry-instrumentation-confluent-kafka>=0.48b0
+
+# ---------------------------------------------------------------------------
+# RPC Instrumentations
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation-grpc>=0.48b0
+
+# ---------------------------------------------------------------------------
+# Logging Instrumentation
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation-logging>=0.48b0
+
+# ---------------------------------------------------------------------------
+# AWS Instrumentation
+# ---------------------------------------------------------------------------
+opentelemetry-instrumentation-botocore>=0.48b0

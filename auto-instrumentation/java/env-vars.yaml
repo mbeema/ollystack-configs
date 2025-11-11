@@ -1,0 +1,340 @@
+# =============================================================================
+# OpenTelemetry Java Agent Environment Variables Reference
+# =============================================================================
+# Complete reference of environment variables for configuring the
+# OpenTelemetry Java auto-instrumentation agent.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Service Identification
+# ---------------------------------------------------------------------------
+service:
+  - name: OTEL_SERVICE_NAME
+    description: >
+      Logical name of the service. This appears as the service name in your
+      observability backend (Jaeger, Tempo, etc.).
+    default: "unknown_service:java"
+    example: "order-service"
+    required: true
+
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    description: >
+      Comma-separated list of key=value pairs to add as resource attributes.
+      These attributes are attached to every span, metric, and log emitted
+      by this service.
+    default: ""
+    example: "deployment.environment=production,service.namespace=shop,service.version=2.1.0,team=backend"
+    required: false
+
+# ---------------------------------------------------------------------------
+# OTLP Exporter Configuration
+# ---------------------------------------------------------------------------
+exporter:
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    description: >
+      Target URL for the OTLP exporter. For gRPC this is typically port 4317;
+      for HTTP/protobuf this is typically port 4318.
+    default: "http://localhost:4317"
+    example: "http://otel-collector.observability.svc.cluster.local:4317"
+    required: true
+
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    description: >
+      Transport protocol for the OTLP exporter.
+      Options: grpc, http/protobuf.
+    default: "grpc"
+    example: "grpc"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_HEADERS
+    description: >
+      Comma-separated list of key=value pairs to send as headers with every
+      OTLP export request. Useful for authentication tokens.
+    default: ""
+    example: "Authorization=Bearer my-token,X-Custom-Header=value"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_TIMEOUT
+    description: >
+      Maximum time (in milliseconds) the exporter will wait for each batch
+      export to complete.
+    default: "10000"
+    example: "30000"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_COMPRESSION
+    description: >
+      Compression type for OTLP payloads. Options: gzip, none.
+    default: "none"
+    example: "gzip"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+    description: >
+      Path to the TLS certificate file for securing the OTLP connection.
+    default: ""
+    example: "/etc/ssl/certs/ca-certificates.crt"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_CLIENT_KEY
+    description: >
+      Path to the client private key file for mTLS authentication.
+    default: ""
+    example: "/etc/ssl/private/client.key"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE
+    description: >
+      Path to the client certificate file for mTLS authentication.
+    default: ""
+    example: "/etc/ssl/certs/client.crt"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Signal-Specific Exporter Configuration
+# ---------------------------------------------------------------------------
+signal_exporters:
+  - name: OTEL_TRACES_EXPORTER
+    description: >
+      Exporter for trace data. Options: otlp, zipkin, jaeger, console, none.
+    default: "otlp"
+    example: "otlp"
+    required: false
+
+  - name: OTEL_METRICS_EXPORTER
+    description: >
+      Exporter for metric data. Options: otlp, prometheus, console, none.
+    default: "otlp"
+    example: "otlp"
+    required: false
+
+  - name: OTEL_LOGS_EXPORTER
+    description: >
+      Exporter for log data. Options: otlp, console, none.
+    default: "otlp"
+    example: "otlp"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    description: >
+      Override the OTLP endpoint for traces only. If not set, falls back
+      to OTEL_EXPORTER_OTLP_ENDPOINT.
+    default: ""
+    example: "http://trace-collector:4317"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+    description: >
+      Override the OTLP endpoint for metrics only. If not set, falls back
+      to OTEL_EXPORTER_OTLP_ENDPOINT.
+    default: ""
+    example: "http://metrics-collector:4317"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+    description: >
+      Override the OTLP endpoint for logs only. If not set, falls back
+      to OTEL_EXPORTER_OTLP_ENDPOINT.
+    default: ""
+    example: "http://logs-collector:4317"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Propagation
+# ---------------------------------------------------------------------------
+propagation:
+  - name: OTEL_PROPAGATORS
+    description: >
+      Comma-separated list of propagators for distributed context.
+      Options: tracecontext, baggage, b3, b3multi, jaeger, xray, ottrace.
+    default: "tracecontext,baggage"
+    example: "tracecontext,baggage,b3multi"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Sampling
+# ---------------------------------------------------------------------------
+sampling:
+  - name: OTEL_TRACES_SAMPLER
+    description: >
+      Sampler to use for trace data. Options:
+        always_on          - Sample every trace
+        always_off         - Drop every trace
+        traceidratio       - Sample a fraction of traces
+        parentbased_always_on       - Respect parent; default to always_on
+        parentbased_always_off      - Respect parent; default to always_off
+        parentbased_traceidratio    - Respect parent; default to ratio
+    default: "parentbased_always_on"
+    example: "parentbased_traceidratio"
+    required: false
+
+  - name: OTEL_TRACES_SAMPLER_ARG
+    description: >
+      Argument for the sampler. For traceidratio samplers, this is a float
+      between 0.0 (drop all) and 1.0 (keep all).
+    default: "1.0"
+    example: "0.1"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Batch Span Processor
+# ---------------------------------------------------------------------------
+batch_processor:
+  - name: OTEL_BSP_SCHEDULE_DELAY
+    description: >
+      Delay interval (in milliseconds) between two consecutive batch exports.
+    default: "5000"
+    example: "5000"
+    required: false
+
+  - name: OTEL_BSP_MAX_QUEUE_SIZE
+    description: >
+      Maximum number of spans kept in the queue before dropping.
+    default: "2048"
+    example: "4096"
+    required: false
+
+  - name: OTEL_BSP_MAX_EXPORT_BATCH_SIZE
+    description: >
+      Maximum batch size for a single export.
+    default: "512"
+    example: "512"
+    required: false
+
+  - name: OTEL_BSP_EXPORT_TIMEOUT
+    description: >
+      Maximum time (in milliseconds) allowed for exporting a batch.
+    default: "30000"
+    example: "30000"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Span Limits
+# ---------------------------------------------------------------------------
+span_limits:
+  - name: OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT
+    description: >
+      Maximum length of a span attribute value. Values longer than this
+      are truncated. No limit if not set.
+    default: "no limit"
+    example: "4096"
+    required: false
+
+  - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+    description: >
+      Maximum number of attributes per span.
+    default: "128"
+    example: "128"
+    required: false
+
+  - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+    description: >
+      Maximum number of events per span.
+    default: "128"
+    example: "128"
+    required: false
+
+  - name: OTEL_SPAN_LINK_COUNT_LIMIT
+    description: >
+      Maximum number of links per span.
+    default: "128"
+    example: "128"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Java Agent-Specific Configuration
+# ---------------------------------------------------------------------------
+java_agent:
+  - name: JAVA_TOOL_OPTIONS
+    description: >
+      JVM flag to attach the OTel Java agent. Set to
+      -javaagent:/path/to/opentelemetry-javaagent.jar.
+      This env var is picked up by any JVM process.
+    default: ""
+    example: "-javaagent:/opt/otel/opentelemetry-javaagent.jar"
+    required: true
+
+  - name: OTEL_JAVAAGENT_DEBUG
+    description: >
+      Enable debug logging for the OTel Java agent. Useful for
+      troubleshooting instrumentation issues.
+    default: "false"
+    example: "true"
+    required: false
+
+  - name: OTEL_JAVAAGENT_ENABLED
+    description: >
+      Enable or disable the Java agent entirely. Set to false to
+      disable without removing the -javaagent flag.
+    default: "true"
+    example: "false"
+    required: false
+
+  - name: OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED
+    description: >
+      Enable or disable all instrumentations by default. Individual
+      instrumentations can be toggled with their own flags.
+    default: "true"
+    example: "false"
+    required: false
+
+  - name: OTEL_INSTRUMENTATION_[NAME]_ENABLED
+    description: >
+      Enable or disable a specific instrumentation. Replace [NAME]
+      with the instrumentation name (e.g., SPRING_WEBMVC, JDBC, KAFKA).
+    default: "true"
+    example: "OTEL_INSTRUMENTATION_KAFKA_ENABLED=false"
+    required: false
+
+  - name: OTEL_JAVAAGENT_EXTENSIONS
+    description: >
+      Comma-separated list of paths to extension JARs to load alongside
+      the agent. Useful for custom instrumentation or samplers.
+    default: ""
+    example: "/opt/otel/extensions/my-extension.jar"
+    required: false
+
+  - name: OTEL_JAVAAGENT_EXCLUDE_CLASSES
+    description: >
+      Comma-separated list of class name prefixes to exclude from
+      instrumentation. Useful for avoiding conflicts.
+    default: ""
+    example: "com.example.internal.*,org.legacy.*"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Metric-Specific Configuration
+# ---------------------------------------------------------------------------
+metrics:
+  - name: OTEL_METRIC_EXPORT_INTERVAL
+    description: >
+      Interval (in milliseconds) between metric exports.
+    default: "60000"
+    example: "30000"
+    required: false
+
+  - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+    description: >
+      Temporality preference for metrics. Options: cumulative, delta, lowmemory.
+    default: "cumulative"
+    example: "delta"
+    required: false
+
+# ---------------------------------------------------------------------------
+# Log Correlation
+# ---------------------------------------------------------------------------
+logs:
+  - name: OTEL_INSTRUMENTATION_LOG4J_APPENDER_ENABLED
+    description: >
+      Enable auto-injection of trace context (trace_id, span_id) into
+      Log4j2 log records via the OTel Log4j appender.
+    default: "true"
+    example: "true"
+    required: false
+
+  - name: OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED
+    description: >
+      Enable auto-injection of trace context into Logback log records.
+    default: "true"
+    example: "true"
+    required: false

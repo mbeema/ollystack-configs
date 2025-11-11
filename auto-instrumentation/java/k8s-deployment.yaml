@@ -1,0 +1,210 @@
+# =============================================================================
+# Kubernetes Deployment for Java Application with OpenTelemetry
+# =============================================================================
+# Two approaches are shown below:
+#   (a) Agent JAR baked into the container image
+#   (b) OTel Operator annotation (zero-code injection)
+# =============================================================================
+
+---
+# =============================================================================
+# Approach A: Agent JAR Included in Container Image
+# =============================================================================
+# The Dockerfile already contains the opentelemetry-javaagent.jar and sets
+# JAVA_TOOL_OPTIONS. This deployment simply configures the OTel env vars.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-app-with-otel-agent
+  namespace: default
+  labels:
+    app: java-app
+    instrumentation: otel-agent-in-image
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java-app
+  template:
+    metadata:
+      labels:
+        app: java-app
+        instrumentation: otel-agent-in-image
+    spec:
+      containers:
+        - name: java-app
+          image: my-registry/my-java-app:latest
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            # ---------------------------------------------------------------
+            # OTel Java agent is already attached via JAVA_TOOL_OPTIONS in
+            # the Dockerfile. Override env vars here as needed.
+            # ---------------------------------------------------------------
+            - name: OTEL_SERVICE_NAME
+              value: "java-app"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=production,service.namespace=default,service.version=1.0.0,k8s.namespace.name=$(K8S_NAMESPACE),k8s.pod.name=$(K8S_POD_NAME)"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+            - name: OTEL_PROPAGATORS
+              value: "tracecontext,baggage"
+            - name: OTEL_TRACES_SAMPLER
+              value: "parentbased_traceidratio"
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.5"
+            # Inject K8s metadata via Downward API
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-app
+  namespace: default
+spec:
+  selector:
+    app: java-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP
+
+---
+# =============================================================================
+# Approach B: OTel Operator Auto-Injection (Zero-Code)
+# =============================================================================
+# Prerequisites:
+#   1. OpenTelemetry Operator is installed in the cluster.
+#   2. An Instrumentation CR exists in the namespace (see below).
+#
+# The Operator injects an init container that copies the agent JAR and
+# sets JAVA_TOOL_OPTIONS automatically. No agent is needed in the image.
+# =============================================================================
+
+# Step 1: Create an Instrumentation custom resource
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: java-instrumentation
+  namespace: default
+spec:
+  exporter:
+    endpoint: http://otel-collector.observability.svc.cluster.local:4317
+  propagators:
+    - tracecontext
+    - baggage
+  sampler:
+    type: parentbased_traceidratio
+    argument: "0.5"
+  java:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:latest
+    env:
+      - name: OTEL_LOGS_EXPORTER
+        value: otlp
+
+---
+# Step 2: Deploy the application with the annotation
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-app-with-otel-operator
+  namespace: default
+  labels:
+    app: java-app-operator
+    instrumentation: otel-operator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java-app-operator
+  template:
+    metadata:
+      labels:
+        app: java-app-operator
+      annotations:
+        # -------------------------------------------------------------------
+        # This single annotation tells the OTel Operator to inject the Java
+        # agent into this pod automatically.
+        # -------------------------------------------------------------------
+        instrumentation.opentelemetry.io/inject-java: "true"
+    spec:
+      containers:
+        - name: java-app
+          # This image does NOT need the OTel agent baked in
+          image: my-registry/my-java-app:latest
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "java-app"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=production,service.namespace=default"
+            # K8s metadata via Downward API
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15

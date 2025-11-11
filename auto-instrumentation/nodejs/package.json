@@ -1,0 +1,33 @@
+{
+  "name": "nodejs-otel-auto-instrumentation",
+  "version": "1.0.0",
+  "description": "Node.js application with OpenTelemetry auto-instrumentation",
+  "main": "app.js",
+  "scripts": {
+    "start": "node --require ./tracing.js app.js",
+    "start:otel": "NODE_OPTIONS='--require ./tracing.js' node app.js",
+    "start:debug": "OTEL_LOG_LEVEL=debug OTEL_TRACES_EXPORTER=console node --require ./tracing.js app.js",
+    "dev": "NODE_OPTIONS='--require ./tracing.js' nodemon app.js"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-node": "^0.57.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.55.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.57.0",
+    "@opentelemetry/exporter-metrics-otlp-grpc": "^0.57.0",
+    "@opentelemetry/exporter-logs-otlp-grpc": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/sdk-metrics": "^1.30.0",
+    "@opentelemetry/sdk-logs": "^0.57.0",
+    "@opentelemetry/instrumentation": "^0.57.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
