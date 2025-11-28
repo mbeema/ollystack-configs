@@ -1,0 +1,192 @@
+# =============================================================================
+# OpenTelemetry Collector - Gateway (Two-Tier: Agent -> Gateway)
+# =============================================================================
+#
+# Architecture:
+#
+#   Application --OTLP--> [Agent] --OTLP--> [Gateway] --OTLP--> Backend
+#                                            ^^^^^^^^^
+#                                            YOU ARE HERE
+#
+# The gateway is a centralized collector instance that receives telemetry
+# from all agents. It performs heavy processing: tail sampling, resource
+# enrichment, large-batch aggregation, and exports to the backend.
+#
+# NOTE: If you scale the gateway horizontally (multiple replicas), you
+# MUST add a load-balancing tier that routes by traceID to ensure all
+# spans for a trace arrive at the same gateway. See the
+# agent-loadbalancer-gateway topology for this pattern.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Receivers
+# -----------------------------------------------------------------------------
+receivers:
+  # OTLP receiver - accepts telemetry forwarded from agents
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+
+# -----------------------------------------------------------------------------
+# Processors: Heavy processing for centralized decision-making
+# -----------------------------------------------------------------------------
+processors:
+  # Memory limiter - larger limits for gateway workloads
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 2048
+    spike_limit_mib: 512
+
+  # Batch processor - large batches for efficient backend writes
+  batch:
+    send_batch_size: 4096
+    send_batch_max_size: 8192
+    timeout: 10s
+
+  # Tail sampling - make sampling decisions based on complete traces.
+  # This is the primary reason to use the gateway pattern.
+  tail_sampling:
+    decision_wait: 30s
+    num_traces: 100000
+    expected_new_traces_per_sec: 1000
+    policies:
+      # Policy 1: Always keep traces with errors
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # Policy 2: Always keep traces slower than 2 seconds
+      - name: latency-policy
+        type: latency
+        latency:
+          threshold_ms: 2000
+
+      # Policy 3: Always keep traces with specific attributes
+      - name: important-traces
+        type: string_attribute
+        string_attribute:
+          key: importance
+          values:
+            - high
+            - critical
+
+      # Policy 4: Sample 10% of remaining (non-error, non-slow) traces
+      - name: probabilistic-policy
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+  # Resource enrichment - add environment and deployment metadata
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT:-production}
+        action: upsert
+      - key: service.namespace
+        value: ${env:SERVICE_NAMESPACE:-default}
+        action: upsert
+      - key: collector.tier
+        value: gateway
+        action: upsert
+
+# -----------------------------------------------------------------------------
+# Exporters
+# -----------------------------------------------------------------------------
+exporters:
+  # OTLP exporter to the observability backend
+  otlp:
+    endpoint: ${env:BACKEND_OTLP_ENDPOINT}
+    tls:
+      insecure: ${env:OTLP_INSECURE:-false}
+    headers:
+      Authorization: ${env:BACKEND_AUTH_HEADER:-""}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 20
+      queue_size: 10000
+
+  # Debug exporter for troubleshooting
+  debug:
+    verbosity: basic
+    sampling_initial: 2
+    sampling_thereafter: 500
+
+# -----------------------------------------------------------------------------
+# Extensions
+# -----------------------------------------------------------------------------
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  ballast:
+    size_mib: 512
+
+# -----------------------------------------------------------------------------
+# Service
+# -----------------------------------------------------------------------------
+service:
+  extensions:
+    - health_check
+    - zpages
+    - pprof
+    - ballast
+
+  pipelines:
+    # Traces: tail sampling is applied here at the gateway
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    # Metrics: aggregate from all agents, enrich, export
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    # Logs: enrich and batch all logs from agents
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+      level: detailed

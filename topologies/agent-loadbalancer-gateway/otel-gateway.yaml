@@ -1,0 +1,224 @@
+# =============================================================================
+# OpenTelemetry Collector - Gateway (Three-Tier: Agent -> LB -> Gateway)
+# =============================================================================
+#
+# Architecture:
+#
+#   App --OTLP--> [Agent] --OTLP--> [Load Balancer] --OTLP--> [Gateway] --> Backend
+#                                                               ^^^^^^^^^
+#                                                               YOU ARE HERE
+#
+# The gateway receives trace-ID-routed spans from the load balancer.
+# Because all spans for a given trace arrive at the same gateway instance,
+# tail sampling produces correct results. The gateway also performs
+# resource enrichment and large-batch aggregation before exporting
+# to the backend.
+#
+# This configuration is designed to run as multiple replicas behind the
+# load balancer. Each replica independently performs tail sampling on
+# the traces routed to it.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Receivers
+# -----------------------------------------------------------------------------
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+
+# -----------------------------------------------------------------------------
+# Processors
+# -----------------------------------------------------------------------------
+processors:
+  # Memory limiter - generous limits for gateway workloads
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 4096
+    spike_limit_mib: 1024
+
+  # Large batch processor for efficient backend writes
+  batch:
+    send_batch_size: 4096
+    send_batch_max_size: 8192
+    timeout: 10s
+
+  # Tail sampling - makes decisions based on COMPLETE traces.
+  # This works correctly because the load balancer routes all spans
+  # for a trace to this same gateway instance.
+  tail_sampling:
+    decision_wait: 30s
+    num_traces: 200000
+    expected_new_traces_per_sec: 2000
+    policies:
+      # 1. Always keep traces that contain an error span
+      - name: errors-always-sampled
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # 2. Always keep traces slower than 2 seconds
+      - name: high-latency-always-sampled
+        type: latency
+        latency:
+          threshold_ms: 2000
+
+      # 3. Always keep traces marked as important
+      - name: important-traces
+        type: string_attribute
+        string_attribute:
+          key: importance
+          values:
+            - high
+            - critical
+
+      # 4. Always keep traces from specific critical services
+      - name: critical-services
+        type: string_attribute
+        string_attribute:
+          key: service.name
+          values:
+            - payment-service
+            - auth-service
+            - order-service
+
+      # 5. Composite policy: combine multiple sub-policies with AND logic
+      - name: composite-policy
+        type: composite
+        composite:
+          max_total_spans_per_second: 5000
+          policy_order:
+            - errors-sub
+            - slow-sub
+            - default-sub
+          composite_sub_policy:
+            - name: errors-sub
+              type: status_code
+              status_code:
+                status_codes:
+                  - ERROR
+            - name: slow-sub
+              type: latency
+              latency:
+                threshold_ms: 1000
+            - name: default-sub
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: 5
+          rate_allocation:
+            - policy: errors-sub
+              percent: 50
+            - policy: slow-sub
+              percent: 30
+            - policy: default-sub
+              percent: 20
+
+  # Resource enrichment
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT:-production}
+        action: upsert
+      - key: service.namespace
+        value: ${env:SERVICE_NAMESPACE:-default}
+        action: upsert
+      - key: collector.tier
+        value: gateway
+        action: upsert
+      - key: collector.instance
+        value: ${env:HOSTNAME:-unknown}
+        action: upsert
+
+# -----------------------------------------------------------------------------
+# Exporters
+# -----------------------------------------------------------------------------
+exporters:
+  otlp:
+    endpoint: ${env:BACKEND_OTLP_ENDPOINT}
+    tls:
+      insecure: ${env:OTLP_INSECURE:-false}
+    headers:
+      Authorization: ${env:BACKEND_AUTH_HEADER:-""}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 20
+      queue_size: 10000
+
+# -----------------------------------------------------------------------------
+# Extensions
+# -----------------------------------------------------------------------------
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  ballast:
+    size_mib: 1024
+
+# -----------------------------------------------------------------------------
+# Service
+# -----------------------------------------------------------------------------
+service:
+  extensions:
+    - health_check
+    - zpages
+    - pprof
+    - ballast
+
+  pipelines:
+    # Traces: tail sampling applied to complete, trace-ID-routed traces
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - tail_sampling
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    # Metrics: enrich and batch
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    # Logs: enrich and batch
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+      level: detailed

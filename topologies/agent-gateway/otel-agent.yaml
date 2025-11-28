@@ -1,0 +1,187 @@
+# =============================================================================
+# OpenTelemetry Collector - Agent (Two-Tier: Agent -> Gateway)
+# =============================================================================
+#
+# Architecture:
+#
+#   Application --OTLP--> [Agent] --OTLP--> [Gateway] --OTLP--> Backend
+#                          ^^^^^^^
+#                          YOU ARE HERE
+#
+# The agent runs on each host alongside the application. It performs
+# lightweight processing (resource detection, batching, memory limiting)
+# and forwards all telemetry to the centralized gateway. No sampling
+# is performed at the agent level -- sampling decisions are delegated
+# to the gateway.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Receivers
+# -----------------------------------------------------------------------------
+receivers:
+  # OTLP receiver - accepts traces, metrics, and logs from instrumented apps
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Host metrics receiver - collects system-level metrics
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      disk: {}
+      filesystem:
+        exclude_mount_points:
+          mount_points:
+            - /dev/*
+            - /proc/*
+            - /sys/*
+          match_type: regexp
+      load: {}
+      network: {}
+      processes: {}
+
+  # File log receiver - collects application and system logs
+  filelog:
+    include:
+      - /var/log/app/*.log
+      - /var/log/syslog
+    include_file_name: true
+    include_file_path: true
+    operators:
+      - type: regex_parser
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)\s+(?P<severity>\w+)\s+(?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: '%Y-%m-%dT%H:%M:%S%z'
+        severity:
+          parse_from: attributes.severity
+        on_error: send
+      - type: move
+        from: attributes.message
+        to: body
+
+# -----------------------------------------------------------------------------
+# Processors: Lightweight - keep the agent fast and low-overhead
+# -----------------------------------------------------------------------------
+processors:
+  # Memory limiter - first processor in every pipeline
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+  # Batch processor - small batches for low-latency forwarding to gateway
+  batch:
+    send_batch_size: 512
+    send_batch_max_size: 1024
+    timeout: 3s
+
+  # Resource detection - tag telemetry with host identity
+  resourcedetection:
+    detectors:
+      - system
+      - env
+    system:
+      hostname_sources:
+        - os
+      resource_attributes:
+        host.name:
+          enabled: true
+        host.id:
+          enabled: true
+        os.type:
+          enabled: true
+        host.arch:
+          enabled: true
+
+# -----------------------------------------------------------------------------
+# Exporters: Forward everything to the gateway
+# -----------------------------------------------------------------------------
+exporters:
+  # OTLP exporter to the gateway collector
+  otlp:
+    endpoint: ${env:GATEWAY_OTLP_ENDPOINT}
+    tls:
+      insecure: ${env:OTLP_INSECURE:-false}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 2500
+
+# -----------------------------------------------------------------------------
+# Extensions
+# -----------------------------------------------------------------------------
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+# -----------------------------------------------------------------------------
+# Service: Pipelines
+# -----------------------------------------------------------------------------
+service:
+  extensions:
+    - health_check
+    - zpages
+
+  pipelines:
+    # Traces: no sampling at agent -- gateway handles sampling
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - otlp
+
+    # Metrics: OTLP + host metrics, forward to gateway
+    metrics:
+      receivers:
+        - otlp
+        - hostmetrics
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - otlp
+
+    # Logs: OTLP + file logs, forward to gateway
+    logs:
+      receivers:
+        - otlp
+        - filelog
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+      level: basic

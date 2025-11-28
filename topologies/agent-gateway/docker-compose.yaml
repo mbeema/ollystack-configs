@@ -1,0 +1,167 @@
+# =============================================================================
+# Docker Compose - Agent-Gateway Topology (Two-Tier)
+# =============================================================================
+#
+# Architecture:
+#
+#   [App A] ---> [Agent A] ---+
+#                              |
+#   [App B] ---> [Agent B] ---+--> [Gateway] --OTLP--> [Jaeger Backend]
+#                              |
+#   [App C] ---> [Agent C] ---+
+#
+# This compose file demonstrates the two-tier topology with:
+#   - Multiple sample apps, each with a local agent
+#   - A centralized gateway for heavy processing and tail sampling
+#   - A Jaeger backend for trace visualization
+#
+# Usage:
+#   docker compose up -d
+#
+# Access:
+#   Jaeger UI:          http://localhost:16686
+#   Gateway health:     http://localhost:13133
+#   Gateway zpages:     http://localhost:55679
+#   Agent A health:     http://localhost:13134
+#   Agent B health:     http://localhost:13135
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Sample Applications
+  # ---------------------------------------------------------------------------
+  sample-app-a:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/tracegen:latest
+    command:
+      - -otlp-endpoint=otel-agent-a:4317
+      - -otlp-insecure
+      - -duration=0
+      - -rate=5
+      - -service=service-a
+    depends_on:
+      otel-agent-a:
+        condition: service_healthy
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+  sample-app-b:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/tracegen:latest
+    command:
+      - -otlp-endpoint=otel-agent-b:4317
+      - -otlp-insecure
+      - -duration=0
+      - -rate=5
+      - -service=service-b
+    depends_on:
+      otel-agent-b:
+        condition: service_healthy
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OTel Agents (one per host / application group)
+  # ---------------------------------------------------------------------------
+  otel-agent-a:
+    image: otel/opentelemetry-collector-contrib:0.115.0
+    command:
+      - --config=/etc/otelcol/otel-agent.yaml
+    volumes:
+      - ./otel-agent.yaml:/etc/otelcol/otel-agent.yaml:ro
+    ports:
+      - "4317:4317"
+      - "13134:13133"
+    environment:
+      - GATEWAY_OTLP_ENDPOINT=otel-gateway:4317
+      - OTLP_INSECURE=true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      otel-gateway:
+        condition: service_healthy
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+  otel-agent-b:
+    image: otel/opentelemetry-collector-contrib:0.115.0
+    command:
+      - --config=/etc/otelcol/otel-agent.yaml
+    volumes:
+      - ./otel-agent.yaml:/etc/otelcol/otel-agent.yaml:ro
+    ports:
+      - "4327:4317"
+      - "13135:13133"
+    environment:
+      - GATEWAY_OTLP_ENDPOINT=otel-gateway:4317
+      - OTLP_INSECURE=true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      otel-gateway:
+        condition: service_healthy
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OTel Gateway (centralized processing)
+  # ---------------------------------------------------------------------------
+  otel-gateway:
+    image: otel/opentelemetry-collector-contrib:0.115.0
+    command:
+      - --config=/etc/otelcol/otel-gateway.yaml
+    volumes:
+      - ./otel-gateway.yaml:/etc/otelcol/otel-gateway.yaml:ro
+    ports:
+      - "4347:4317"       # OTLP gRPC (for agents)
+      - "8888:8888"       # Collector internal metrics
+      - "13133:13133"     # Health check
+      - "55679:55679"     # zpages
+    environment:
+      - BACKEND_OTLP_ENDPOINT=jaeger:4317
+      - OTLP_INSECURE=true
+      - DEPLOYMENT_ENVIRONMENT=docker-compose
+      - SERVICE_NAMESPACE=demo
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      - jaeger
+    networks:
+      - otel-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  # ---------------------------------------------------------------------------
+  # Jaeger Backend
+  # ---------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"     # Jaeger UI
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+networks:
+  otel-network:
+    driver: bridge

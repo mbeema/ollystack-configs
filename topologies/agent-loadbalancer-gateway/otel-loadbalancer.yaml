@@ -1,0 +1,130 @@
+# =============================================================================
+# OpenTelemetry Collector - Load Balancer (Three-Tier: Agent -> LB -> Gateway)
+# =============================================================================
+#
+# Architecture:
+#
+#   App --OTLP--> [Agent] --OTLP--> [Load Balancer] --OTLP--> [Gateway] --> Backend
+#                                    ^^^^^^^^^^^^^^^^
+#                                    YOU ARE HERE
+#
+# The load balancer is the critical middle tier. It receives spans from
+# all agents and routes them to gateway instances using consistent hashing
+# on the trace ID. This ensures ALL spans belonging to the same trace
+# arrive at the SAME gateway instance, which is a hard requirement for
+# correct tail sampling.
+#
+# The loadbalancing exporter uses a DNS resolver to discover gateway
+# instances. In Kubernetes, point it at a headless Service so it
+# discovers individual pod IPs.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Receivers
+# -----------------------------------------------------------------------------
+receivers:
+  # OTLP receiver - accepts spans forwarded from agents
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+
+# -----------------------------------------------------------------------------
+# Processors: Minimal processing -- the LB should be fast and pass-through
+# -----------------------------------------------------------------------------
+processors:
+  # Memory limiter to protect the LB from OOM
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 1024
+    spike_limit_mib: 256
+
+# -----------------------------------------------------------------------------
+# Exporters
+# -----------------------------------------------------------------------------
+exporters:
+  # Load-balancing exporter: the key component of this tier.
+  # Routes spans to gateway instances based on trace ID using consistent
+  # hashing. Uses DNS to discover gateway endpoints.
+  loadbalancing:
+    routing_key: traceID
+    protocol:
+      otlp:
+        tls:
+          insecure: ${env:OTLP_INSECURE:-false}
+        retry_on_failure:
+          enabled: true
+          initial_interval: 1s
+          max_interval: 10s
+        timeout: 30s
+    resolver:
+      # DNS resolver: resolves a hostname to multiple A records.
+      # In Kubernetes, use a headless Service so DNS returns individual
+      # pod IPs for the gateway StatefulSet.
+      dns:
+        hostname: ${env:GATEWAY_DNS_HOSTNAME}
+        port: ${env:GATEWAY_DNS_PORT:-4317}
+        interval: 5s
+
+# -----------------------------------------------------------------------------
+# Extensions
+# -----------------------------------------------------------------------------
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+# -----------------------------------------------------------------------------
+# Service
+# -----------------------------------------------------------------------------
+service:
+  extensions:
+    - health_check
+    - zpages
+    - pprof
+
+  pipelines:
+    # Traces: route by traceID to gateways via loadbalancing exporter.
+    # Only traces use the loadbalancing exporter because tail sampling
+    # is trace-specific. Metrics and logs use standard OTLP export.
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+      exporters:
+        - loadbalancing
+
+    # Metrics: forward to a single gateway endpoint (no trace-ID routing needed)
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+      exporters:
+        - loadbalancing
+
+    # Logs: forward to gateways (loadbalancing distributes evenly)
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+      exporters:
+        - loadbalancing
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+      level: detailed

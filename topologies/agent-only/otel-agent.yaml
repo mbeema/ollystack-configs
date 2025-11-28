@@ -1,0 +1,208 @@
+# =============================================================================
+# OpenTelemetry Collector - Agent-Only Topology
+# =============================================================================
+#
+# Architecture:
+#
+#   Application --OTLP--> [Agent] --OTLP--> Backend
+#
+# The agent runs on the same host as the application. It receives telemetry
+# via OTLP, collects host metrics and logs, applies lightweight processing
+# (batching, memory limiting, head-based sampling), and exports directly
+# to the observability backend.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Receivers: Ingest telemetry from applications and the host
+# -----------------------------------------------------------------------------
+receivers:
+  # OTLP receiver - accepts traces, metrics, and logs from instrumented apps
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Host metrics receiver - collects system-level metrics from the host
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      disk: {}
+      filesystem:
+        exclude_mount_points:
+          mount_points:
+            - /dev/*
+            - /proc/*
+            - /sys/*
+          match_type: regexp
+      load: {}
+      network: {}
+      processes: {}
+
+  # File log receiver - collects logs from files on the host
+  filelog:
+    include:
+      - /var/log/app/*.log
+      - /var/log/syslog
+    include_file_name: true
+    include_file_path: true
+    operators:
+      # Parse timestamps from log lines
+      - type: regex_parser
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)\s+(?P<severity>\w+)\s+(?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: '%Y-%m-%dT%H:%M:%S%z'
+        severity:
+          parse_from: attributes.severity
+        on_error: send
+      # Move parsed message to body
+      - type: move
+        from: attributes.message
+        to: body
+
+# -----------------------------------------------------------------------------
+# Processors: Lightweight processing suitable for an agent
+# -----------------------------------------------------------------------------
+processors:
+  # Memory limiter - prevents the collector from running out of memory.
+  # MUST be the first processor in every pipeline.
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Batch processor - groups telemetry into batches for efficient export
+  batch:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+
+  # Resource detection - automatically adds host metadata to all telemetry
+  resourcedetection:
+    detectors:
+      - system
+      - env
+    system:
+      hostname_sources:
+        - os
+      resource_attributes:
+        host.name:
+          enabled: true
+        host.id:
+          enabled: true
+        os.type:
+          enabled: true
+        host.arch:
+          enabled: true
+
+  # Head-based probabilistic sampling - sample a percentage of traces.
+  # This is applied at the agent level BEFORE the trace is complete.
+  # For tail sampling (decision based on complete trace), use the
+  # agent-gateway or agent-loadbalancer-gateway topology instead.
+  probabilistic_sampler:
+    sampling_percentage: 25
+    hash_seed: 22
+
+# -----------------------------------------------------------------------------
+# Exporters: Send processed telemetry to the backend
+# -----------------------------------------------------------------------------
+exporters:
+  # OTLP exporter - sends telemetry to the observability backend
+  otlp:
+    endpoint: ${env:BACKEND_OTLP_ENDPOINT}
+    tls:
+      insecure: ${env:OTLP_INSECURE:-false}
+    headers:
+      Authorization: ${env:BACKEND_AUTH_HEADER:-""}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+
+  # Debug exporter - logs telemetry to stdout (use for development only)
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+# -----------------------------------------------------------------------------
+# Extensions: Health, metrics, and profiling for the collector itself
+# -----------------------------------------------------------------------------
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+# -----------------------------------------------------------------------------
+# Service: Wire receivers -> processors -> exporters into pipelines
+# -----------------------------------------------------------------------------
+service:
+  extensions:
+    - health_check
+    - zpages
+    - pprof
+
+  pipelines:
+    # Traces pipeline: receive OTLP traces, sample, batch, and export
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - probabilistic_sampler
+        - resourcedetection
+        - batch
+      exporters:
+        - otlp
+
+    # Metrics pipeline: receive OTLP + host metrics, batch, and export
+    metrics:
+      receivers:
+        - otlp
+        - hostmetrics
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - otlp
+
+    # Logs pipeline: receive OTLP + file logs, batch, and export
+    logs:
+      receivers:
+        - otlp
+        - filelog
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+      level: detailed

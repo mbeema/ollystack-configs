@@ -1,0 +1,153 @@
+# =============================================================================
+# OpenTelemetry Collector - Sidecar Configuration
+# =============================================================================
+#
+# Architecture:
+#
+#   +--------- Pod ----------+
+#   |  App --> [Sidecar] ----+--> Gateway / Backend
+#   +------------------------+
+#
+# The sidecar runs alongside the application in the same Pod. It listens
+# on localhost only (127.0.0.1) since it only needs to receive telemetry
+# from the co-located application container. It performs lightweight
+# processing and forwards to a gateway or backend.
+#
+# This config is intentionally lightweight: the sidecar should consume
+# minimal CPU and memory. Heavy processing (tail sampling, enrichment)
+# is delegated to the downstream gateway.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Receivers
+# -----------------------------------------------------------------------------
+receivers:
+  # OTLP receiver - listens on localhost only (same Pod, no external access)
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  # File log receiver - reads logs from a shared volume with the app container
+  filelog:
+    include:
+      - /var/log/app/*.log
+    include_file_name: true
+    include_file_path: true
+    start_at: end
+    operators:
+      - type: regex_parser
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)\s+(?P<severity>\w+)\s+(?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: '%Y-%m-%dT%H:%M:%S%z'
+        severity:
+          parse_from: attributes.severity
+        on_error: send
+      - type: move
+        from: attributes.message
+        to: body
+
+# -----------------------------------------------------------------------------
+# Processors: Lightweight - minimal overhead per Pod
+# -----------------------------------------------------------------------------
+processors:
+  # Memory limiter - tight limits for sidecar (shares Pod resources)
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 128
+    spike_limit_mib: 32
+
+  # Small batch processor for efficient forwarding
+  batch:
+    send_batch_size: 256
+    send_batch_max_size: 512
+    timeout: 5s
+
+  # Add the Pod's service identity to all telemetry
+  resource:
+    attributes:
+      - key: k8s.pod.name
+        value: ${env:POD_NAME:-unknown}
+        action: upsert
+      - key: k8s.namespace.name
+        value: ${env:POD_NAMESPACE:-default}
+        action: upsert
+      - key: k8s.node.name
+        value: ${env:NODE_NAME:-unknown}
+        action: upsert
+
+# -----------------------------------------------------------------------------
+# Exporters
+# -----------------------------------------------------------------------------
+exporters:
+  # OTLP exporter to the gateway (or directly to backend)
+  otlp:
+    endpoint: ${env:GATEWAY_OTLP_ENDPOINT}
+    tls:
+      insecure: ${env:OTLP_INSECURE:-false}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 120s
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 1000
+
+# -----------------------------------------------------------------------------
+# Extensions
+# -----------------------------------------------------------------------------
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+# -----------------------------------------------------------------------------
+# Service
+# -----------------------------------------------------------------------------
+service:
+  extensions:
+    - health_check
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+    logs:
+      receivers:
+        - otlp
+        - filelog
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp
+
+  telemetry:
+    logs:
+      level: warn
+    metrics:
+      address: 0.0.0.0:8888
+      level: basic

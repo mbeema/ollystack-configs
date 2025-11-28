@@ -1,0 +1,235 @@
+# =============================================================================
+# OpenTelemetry Operator - Sidecar Custom Resource
+# =============================================================================
+#
+# Architecture:
+#
+#   The OpenTelemetry Operator watches for Pods with the annotation:
+#     sidecar.opentelemetry.io/inject: "true"
+#
+#   When it detects such a Pod, it automatically injects an OTel Collector
+#   sidecar container based on this OpenTelemetryCollector CR configuration.
+#
+#   +------------------ Pod (auto-injected) -------------------+
+#   |                                                          |
+#   |  +-------------------+       +-----------------------+   |
+#   |  |  App Container    | OTLP  |  OTel Sidecar         |   |
+#   |  |  (user-defined)   +------>+  (operator-injected)  |   |
+#   |  +-------------------+       +-----------+-----------+   |
+#   +------------------------------------------+---------------+
+#                                              |
+#                                              v
+#                                       Gateway / Backend
+#
+# Prerequisites:
+#   1. Install the OTel Operator:
+#      kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/latest/download/opentelemetry-operator.yaml
+#
+#   2. Apply this CR:
+#      kubectl apply -f otel-operator-sidecar.yaml
+#
+#   3. Annotate your Pods or Deployments:
+#      metadata:
+#        annotations:
+#          sidecar.opentelemetry.io/inject: "true"
+#
+#   4. The operator will inject the sidecar on the next Pod creation.
+#
+# =============================================================================
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-sidecar
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: otel-sidecar
+    app.kubernetes.io/component: collector
+    app.kubernetes.io/part-of: observability
+spec:
+  # ---------------------------------------------------------------------------
+  # Mode: sidecar
+  # ---------------------------------------------------------------------------
+  # The operator will inject this collector as a sidecar container into any
+  # Pod that has the annotation: sidecar.opentelemetry.io/inject: "true"
+  mode: sidecar
+
+  # ---------------------------------------------------------------------------
+  # Image
+  # ---------------------------------------------------------------------------
+  image: otel/opentelemetry-collector-contrib:0.115.0
+
+  # ---------------------------------------------------------------------------
+  # Resource limits for the injected sidecar container
+  # ---------------------------------------------------------------------------
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 192Mi
+
+  # ---------------------------------------------------------------------------
+  # Environment variables injected into the sidecar
+  # ---------------------------------------------------------------------------
+  env:
+    - name: GATEWAY_OTLP_ENDPOINT
+      value: "otel-gateway.observability.svc.cluster.local:4317"
+    - name: OTLP_INSECURE
+      value: "true"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+
+  # ---------------------------------------------------------------------------
+  # Collector Configuration
+  # ---------------------------------------------------------------------------
+  config:
+    receivers:
+      # OTLP receiver on localhost only (same Pod network namespace)
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 127.0.0.1:4317
+          http:
+            endpoint: 127.0.0.1:4318
+
+    processors:
+      # Memory limiter - tight limits for sidecar
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 128
+        spike_limit_mib: 32
+
+      # Small batch for efficient forwarding
+      batch:
+        send_batch_size: 256
+        send_batch_max_size: 512
+        timeout: 5s
+
+      # Add Pod identity to all telemetry
+      resource:
+        attributes:
+          - key: k8s.pod.name
+            value: ${env:POD_NAME}
+            action: upsert
+          - key: k8s.namespace.name
+            value: ${env:POD_NAMESPACE}
+            action: upsert
+          - key: k8s.node.name
+            value: ${env:NODE_NAME}
+            action: upsert
+
+    exporters:
+      # Forward to gateway
+      otlp:
+        endpoint: ${env:GATEWAY_OTLP_ENDPOINT}
+        tls:
+          insecure: ${env:OTLP_INSECURE}
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+        sending_queue:
+          enabled: true
+          num_consumers: 2
+          queue_size: 1000
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions:
+        - health_check
+      pipelines:
+        traces:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            - resource
+            - batch
+          exporters:
+            - otlp
+        metrics:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            - resource
+            - batch
+          exporters:
+            - otlp
+        logs:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            - resource
+            - batch
+          exporters:
+            - otlp
+      telemetry:
+        logs:
+          level: warn
+        metrics:
+          address: 0.0.0.0:8888
+
+---
+# =============================================================================
+# Example: Deployment with sidecar injection annotation
+# =============================================================================
+# Apply the annotation to any Deployment/Pod to have the operator
+# automatically inject the OTel sidecar defined above.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  namespace: default
+  labels:
+    app: my-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+      annotations:
+        # This annotation triggers the operator to inject the sidecar
+        sidecar.opentelemetry.io/inject: "true"
+    spec:
+      containers:
+        - name: my-app
+          image: my-app:latest
+          ports:
+            - containerPort: 8080
+          env:
+            # The operator automatically sets OTEL_EXPORTER_OTLP_ENDPOINT
+            # to point to the injected sidecar. You can also set it explicitly:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://localhost:4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_SERVICE_NAME
+              value: "my-app"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

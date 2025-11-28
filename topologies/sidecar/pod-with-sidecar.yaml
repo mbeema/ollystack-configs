@@ -1,0 +1,279 @@
+# =============================================================================
+# Kubernetes Pod Spec - Application with OTel Collector Sidecar
+# =============================================================================
+#
+# Architecture:
+#
+#   +------------------------- Pod ----------------------------+
+#   |                                                          |
+#   |  +-------------------+       +-----------------------+   |
+#   |  |                   | OTLP  |                       |   |
+#   |  |  App Container    +------>+  OTel Sidecar         |   |
+#   |  |                   |:4317  |  Container            |   |
+#   |  |  - Writes logs to |       |  - Reads logs from    |   |
+#   |  |    /var/log/app   |       |    /var/log/app       |   |
+#   |  |                   |       |  - Exports to gateway |   |
+#   |  +-------------------+       +-----------+-----------+   |
+#   |                                          |               |
+#   |  Shared volume: app-logs                 |               |
+#   +------------------------------------------+---------------+
+#                                              |
+#                                              v
+#                                     Gateway / Backend
+#
+# This manifest shows how to manually add an OTel Collector as a sidecar
+# container in a Pod. Both containers share the Pod's network namespace
+# (app sends to localhost) and a shared volume for log files.
+#
+# For automatic injection, use the OpenTelemetry Operator instead
+# (see otel-operator-sidecar.yaml).
+#
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-app-with-otel-sidecar
+  namespace: default
+  labels:
+    app: my-app
+    otel-sidecar: "true"
+  annotations:
+    # Informational: this Pod has a manually configured OTel sidecar
+    instrumentation.opentelemetry.io/inject: "manual"
+spec:
+  # Share process namespace so the sidecar can observe the app (optional)
+  shareProcessNamespace: false
+
+  # ---------------------------------------------------------------------------
+  # Init container: ensure the shared log directory exists
+  # ---------------------------------------------------------------------------
+  initContainers:
+    - name: init-log-dir
+      image: busybox:1.36
+      command: ["sh", "-c", "mkdir -p /var/log/app && chmod 777 /var/log/app"]
+      volumeMounts:
+        - name: app-logs
+          mountPath: /var/log/app
+
+  # ---------------------------------------------------------------------------
+  # Containers
+  # ---------------------------------------------------------------------------
+  containers:
+    # -------------------------------------------------------------------------
+    # Application Container
+    # -------------------------------------------------------------------------
+    - name: my-app
+      image: my-app:latest
+      ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+      env:
+        # Configure the OTel SDK to export to the sidecar on localhost
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://localhost:4318"
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: "http/protobuf"
+        - name: OTEL_SERVICE_NAME
+          value: "my-app"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.version=1.0.0,deployment.environment=production"
+        # Pass Pod identity for the sidecar to use
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      volumeMounts:
+        # Shared volume: app writes logs here, sidecar reads them
+        - name: app-logs
+          mountPath: /var/log/app
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 15
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
+
+    # -------------------------------------------------------------------------
+    # OTel Collector Sidecar Container
+    # -------------------------------------------------------------------------
+    - name: otel-sidecar
+      image: otel/opentelemetry-collector-contrib:0.115.0
+      args:
+        - --config=/etc/otelcol/otel-sidecar.yaml
+      env:
+        # Gateway endpoint for the sidecar to forward telemetry to
+        - name: GATEWAY_OTLP_ENDPOINT
+          value: "otel-gateway.observability.svc.cluster.local:4317"
+        - name: OTLP_INSECURE
+          value: "true"
+        # Pod identity (passed to resource processor in sidecar config)
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      ports:
+        # Health check port (exposed for liveness probe)
+        - containerPort: 13133
+          name: health
+          protocol: TCP
+        # Internal metrics (optional, for monitoring the sidecar itself)
+        - containerPort: 8888
+          name: metrics
+          protocol: TCP
+      volumeMounts:
+        # Sidecar config mounted from a ConfigMap
+        - name: sidecar-config
+          mountPath: /etc/otelcol
+          readOnly: true
+        # Shared volume: sidecar reads app logs from here
+        - name: app-logs
+          mountPath: /var/log/app
+          readOnly: true
+      resources:
+        # Keep sidecar resources small -- it's lightweight by design
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 192Mi
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 13133
+        initialDelaySeconds: 5
+        periodSeconds: 15
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 13133
+        initialDelaySeconds: 3
+        periodSeconds: 10
+
+  # ---------------------------------------------------------------------------
+  # Volumes
+  # ---------------------------------------------------------------------------
+  volumes:
+    # Shared volume for application logs (emptyDir is ephemeral, per-Pod)
+    - name: app-logs
+      emptyDir:
+        sizeLimit: 100Mi
+
+    # ConfigMap containing the sidecar collector configuration
+    - name: sidecar-config
+      configMap:
+        name: otel-sidecar-config
+        items:
+          - key: otel-sidecar.yaml
+            path: otel-sidecar.yaml
+
+  # ---------------------------------------------------------------------------
+  # Pod-level settings
+  # ---------------------------------------------------------------------------
+  restartPolicy: Always
+  terminationGracePeriodSeconds: 30
+  serviceAccountName: my-app-sa
+
+---
+# =============================================================================
+# ConfigMap for the sidecar collector configuration
+# =============================================================================
+# In production, create this ConfigMap from the otel-sidecar.yaml file:
+#   kubectl create configmap otel-sidecar-config \
+#     --from-file=otel-sidecar.yaml=otel-sidecar.yaml
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-sidecar-config
+  namespace: default
+  labels:
+    app: otel-sidecar
+data:
+  otel-sidecar.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 127.0.0.1:4317
+          http:
+            endpoint: 127.0.0.1:4318
+      filelog:
+        include:
+          - /var/log/app/*.log
+        include_file_name: true
+        include_file_path: true
+        start_at: end
+
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 128
+        spike_limit_mib: 32
+      batch:
+        send_batch_size: 256
+        send_batch_max_size: 512
+        timeout: 5s
+      resource:
+        attributes:
+          - key: k8s.pod.name
+            value: ${env:POD_NAME}
+            action: upsert
+          - key: k8s.namespace.name
+            value: ${env:POD_NAMESPACE}
+            action: upsert
+          - key: k8s.node.name
+            value: ${env:NODE_NAME}
+            action: upsert
+
+    exporters:
+      otlp:
+        endpoint: ${env:GATEWAY_OTLP_ENDPOINT}
+        tls:
+          insecure: ${env:OTLP_INSECURE}
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp]
+        logs:
+          receivers: [otlp, filelog]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp]

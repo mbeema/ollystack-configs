@@ -1,0 +1,91 @@
+# =============================================================================
+# Docker Compose - Agent-Only Topology
+# =============================================================================
+#
+# Architecture:
+#
+#   [Sample App] --OTLP:4317--> [OTel Agent] --OTLP:4317--> [Jaeger Backend]
+#
+# This compose file demonstrates the simplest collector topology: a single
+# agent instance that receives telemetry from an application and exports
+# directly to a Jaeger backend.
+#
+# Usage:
+#   docker compose up -d
+#
+# Access:
+#   Jaeger UI:          http://localhost:16686
+#   Collector health:   http://localhost:13133
+#   Collector zpages:   http://localhost:55679
+#   Collector metrics:  http://localhost:8888/metrics
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Sample Application
+  # ---------------------------------------------------------------------------
+  # A demo application that generates traces, metrics, and logs.
+  # Replace this with your own instrumented application.
+  sample-app:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/tracegen:latest
+    command:
+      - -otlp-endpoint=otel-agent:4317
+      - -otlp-insecure
+      - -duration=0
+      - -rate=5
+    depends_on:
+      otel-agent:
+        condition: service_healthy
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OpenTelemetry Collector (Agent)
+  # ---------------------------------------------------------------------------
+  # The single-tier agent: receives telemetry, processes, exports to backend.
+  otel-agent:
+    image: otel/opentelemetry-collector-contrib:0.115.0
+    command:
+      - --config=/etc/otelcol/otel-agent.yaml
+    volumes:
+      - ./otel-agent.yaml:/etc/otelcol/otel-agent.yaml:ro
+      - /var/log:/var/log:ro
+    ports:
+      - "4317:4317"       # OTLP gRPC receiver
+      - "4318:4318"       # OTLP HTTP receiver
+      - "8888:8888"       # Collector internal metrics
+      - "13133:13133"     # Health check
+      - "55679:55679"     # zpages
+    environment:
+      - BACKEND_OTLP_ENDPOINT=jaeger:4317
+      - OTLP_INSECURE=true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Jaeger Backend (All-in-One)
+  # ---------------------------------------------------------------------------
+  # Jaeger receives OTLP telemetry and provides a UI for trace visualization.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"     # Jaeger UI
+      - "14250:14250"     # Jaeger gRPC
+    networks:
+      - otel-network
+    restart: unless-stopped
+
+networks:
+  otel-network:
+    driver: bridge
