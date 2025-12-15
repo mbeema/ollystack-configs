@@ -1,0 +1,188 @@
+# ============================================================================
+# OllyStack Golden Config: Generic Kubernetes + Grafana LGTM Self-Hosted (Development)
+# ============================================================================
+# Platform:     Generic Kubernetes
+# Backend:      Grafana LGTM Self-Hosted (Tempo, Mimir, Loki)
+# Environment:  Development (full fidelity, minimal filtering)
+# Cost Profile: None (~0% reduction - full telemetry for debugging)
+# Signals:      Traces + Metrics + Logs
+#
+# Prerequisites:
+#   - TEMPO_ENDPOINT     : Tempo gRPC endpoint (e.g., tempo.observability:4317)
+#   - MIMIR_ENDPOINT     : Mimir remote write endpoint (e.g., http://mimir.observability:9009)
+#   - LOKI_ENDPOINT      : Loki OTLP endpoint (e.g., http://loki.observability:3100)
+#   - K8S_NODE_NAME      : Kubernetes node name (set via downward API)
+#
+# Deploy:
+#   otelcol --config golden-configs/k8s-grafana-lgtm-dev.yaml
+# ============================================================================
+
+# ── Receivers ──────────────────────────────────────────────────────────────
+# Ingest telemetry from applications and infrastructure
+receivers:
+  # OpenTelemetry Protocol - primary application telemetry ingestion
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Host-level metrics from the underlying nodes
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+      load: {}
+
+  # Kubernetes cluster-level metrics (deployments, nodes, pods)
+  k8s_cluster:
+    collection_interval: 30s
+    node_conditions_to_report: [Ready, MemoryPressure, DiskPressure]
+    allocatable_types_to_report: [cpu, memory]
+
+  # Kubelet stats for container/pod/node resource usage
+  kubeletstats:
+    collection_interval: 30s
+    auth_type: serviceAccount
+    endpoint: "https://${env:K8S_NODE_NAME}:10250"
+    insecure_skip_verify: true
+    metric_groups: [container, pod, node]
+
+# ── Processors ─────────────────────────────────────────────────────────────
+# Order: memory_limiter (first) -> enrichment -> filtering -> batch (last)
+# Development: minimal filtering to preserve full telemetry fidelity
+processors:
+  # Back-pressure safety valve - MUST be first processor in every pipeline
+  # Prevents OOM kills by refusing data when memory usage is high
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Enrich telemetry with Kubernetes metadata (pod name, namespace, labels)
+  k8sattributes:
+    auth_type: serviceAccount
+    passthrough: false
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.deployment.name
+        - k8s.statefulset.name
+        - k8s.daemonset.name
+        - k8s.cronjob.name
+        - k8s.job.name
+        - k8s.node.name
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.pod.start_time
+      labels:
+        - tag_name: app
+          key: app
+          from: pod
+        - tag_name: version
+          key: version
+          from: pod
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.ip
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.uid
+      - sources:
+          - from: connection
+
+  # Drop health check logs only - dev keeps everything else
+  filter/logs:
+    logs:
+      log_record:
+        - IsMatch(body, ".*health.*") and severity_number < SEVERITY_NUMBER_WARN
+        - IsMatch(body, ".*readiness.*") and severity_number < SEVERITY_NUMBER_WARN
+        - IsMatch(body, ".*liveness.*") and severity_number < SEVERITY_NUMBER_WARN
+
+  # Drop traces for health check and infrastructure endpoints only
+  filter/traces:
+    traces:
+      span:
+        - attributes["http.route"] == "/health"
+        - attributes["http.route"] == "/healthz"
+        - attributes["http.route"] == "/ready"
+        - attributes["http.route"] == "/readyz"
+        - attributes["http.route"] == "/livez"
+        - attributes["http.route"] == "/metrics"
+
+  # Batch telemetry for efficient network usage - MUST be last processor
+  batch:
+    send_batch_size: 8192
+    timeout: 5s
+    send_batch_max_size: 16384
+
+# ── Exporters ──────────────────────────────────────────────────────────────
+exporters:
+  # Grafana Tempo - distributed tracing backend via gRPC
+  otlp/tempo:
+    endpoint: ${TEMPO_ENDPOINT}
+    tls:
+      insecure: true
+
+  # Grafana Mimir - metrics backend via Prometheus remote write
+  prometheusremotewrite/mimir:
+    endpoint: ${MIMIR_ENDPOINT}/api/v1/push
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Grafana Loki - log aggregation backend via OTLP HTTP
+  otlphttp/loki:
+    endpoint: ${LOKI_ENDPOINT}
+
+# ── Extensions ─────────────────────────────────────────────────────────────
+extensions:
+  # Health check endpoint for Kubernetes liveness/readiness probes
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance profiling endpoint
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # Debug pages for pipeline visualization
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+# ── Service ────────────────────────────────────────────────────────────────
+service:
+  extensions: [health_check, pprof, zpages]
+  telemetry:
+    logs:
+      level: debug
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors:
+        - memory_limiter         # 1. Back-pressure protection
+        - k8sattributes          # 2. Kubernetes metadata enrichment
+        - filter/traces          # 3. Drop health check spans
+        - batch                  # 4. Batch for export (always last)
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp, hostmetrics, k8s_cluster, kubeletstats]
+      processors:
+        - memory_limiter         # 1. Back-pressure protection
+        - k8sattributes          # 2. Kubernetes metadata enrichment
+        - batch                  # 3. Batch for export (always last)
+      exporters: [prometheusremotewrite/mimir]
+    logs:
+      receivers: [otlp]
+      processors:
+        - memory_limiter         # 1. Back-pressure protection
+        - k8sattributes          # 2. Kubernetes metadata enrichment
+        - filter/logs            # 3. Drop health check logs
+        - batch                  # 4. Batch for export (always last)
+      exporters: [otlphttp/loki]

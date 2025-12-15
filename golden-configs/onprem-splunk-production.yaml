@@ -1,0 +1,222 @@
+# ============================================================================
+# OllyStack Golden Config: On-Prem VMs + Splunk (Production)
+# ============================================================================
+# Platform:     On-Premises Virtual Machines (no Kubernetes)
+# Backend:      Splunk (HEC for logs/metrics, Splunk O11y for traces)
+# Environment:  Production
+# Cost Profile: Aggressive (~60-80% volume reduction)
+# Signals:      Traces + Metrics + Logs
+#
+# Prerequisites:
+#   - SPLUNK_HEC_TOKEN     : Splunk HTTP Event Collector token
+#   - SPLUNK_HEC_ENDPOINT  : Splunk HEC URL (e.g., https://splunk.company.com:8088/services/collector)
+#   - SPLUNK_O11Y_TOKEN    : Splunk Observability Cloud access token
+#   - SPLUNK_O11Y_REALM    : Splunk O11y realm (e.g., us0, us1, eu0)
+#
+# Deploy:
+#   otelcol --config golden-configs/onprem-splunk-production.yaml
+#
+# Note: This config is designed for bare-metal or VM deployments without
+# Kubernetes. It uses filelog receiver for log collection and system-level
+# resource detection instead of K8s-specific components.
+# ============================================================================
+
+# ── Receivers ──────────────────────────────────────────────────────────────
+# Ingest telemetry from applications and infrastructure
+receivers:
+  # OpenTelemetry Protocol - primary application telemetry ingestion
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Host-level metrics from the underlying VMs
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+      load: {}
+
+  # File-based log collection for on-prem VMs
+  # Reads system logs and application logs from standard paths
+  filelog:
+    include: [/var/log/*.log, /var/log/syslog]
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        regex: '^(?P<time>\S+)\s+(?P<severity>\S+)\s+(?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.time
+          layout: '%Y-%m-%dT%H:%M:%S.%fZ'
+        severity:
+          parse_from: attributes.severity
+
+# ── Processors ─────────────────────────────────────────────────────────────
+# Order: memory_limiter (first) -> enrichment -> filtering -> sampling -> redaction -> batch (last)
+processors:
+  # Back-pressure safety valve - MUST be first processor in every pipeline
+  # Prevents OOM kills by refusing data when memory usage is high
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Detect system resource attributes (hostname, OS type)
+  # On-prem uses system/env detectors instead of cloud-specific ones
+  resourcedetection/system:
+    detectors: [env, system]
+    system:
+      hostname_sources: [os]
+    timeout: 5s
+    override: false
+
+  # Drop logs below WARN severity - production only needs warnings and errors
+  # This is the single biggest cost reduction lever for logs (~50-70% reduction)
+  filter/logs-severity:
+    logs:
+      log_record:
+        - severity_number < SEVERITY_NUMBER_WARN
+
+  # Drop health/readiness/liveness probe logs that are not warnings or errors
+  filter/logs:
+    logs:
+      log_record:
+        - IsMatch(body, ".*health.*") and severity_number < SEVERITY_NUMBER_WARN
+        - IsMatch(body, ".*readiness.*") and severity_number < SEVERITY_NUMBER_WARN
+        - IsMatch(body, ".*liveness.*") and severity_number < SEVERITY_NUMBER_WARN
+
+  # Drop traces for health check and infrastructure endpoints
+  filter/traces:
+    traces:
+      span:
+        - attributes["http.route"] == "/health"
+        - attributes["http.route"] == "/healthz"
+        - attributes["http.route"] == "/ready"
+        - attributes["http.route"] == "/readyz"
+        - attributes["http.route"] == "/livez"
+        - attributes["http.route"] == "/metrics"
+
+  # Drop traces for noisy static asset requests and CORS preflight
+  filter/traces-noisy:
+    traces:
+      span:
+        - attributes["http.route"] == "/favicon.ico"
+        - attributes["http.method"] == "OPTIONS"
+        - IsMatch(attributes["http.route"], ".*\\.(css|js|png|jpg|gif|svg|ico|woff|woff2)$")
+
+  # Strip high-cardinality span attributes to reduce trace storage costs
+  # Truncate remaining attributes to 1KB max
+  transform/traces-cost:
+    trace_statements:
+      - context: span
+        statements:
+          - delete_key(attributes, "http.request.header.user-agent")
+          - delete_key(attributes, "http.request.header.cookie")
+          - truncate_all(attributes, 1024)
+
+  # Tail-based sampling: keep errors, slow traces, and 10% of everything else
+  # This gives full visibility into problems while dramatically reducing volume
+  tail_sampling/composite:
+    decision_wait: 10s
+    num_traces: 100000
+    policies:
+      # Always keep error traces - these are the most valuable for debugging
+      - name: errors
+        type: status_code
+        status_code: {status_codes: [ERROR]}
+      # Always keep slow traces (>2s) - potential performance issues
+      - name: slow-traces
+        type: latency
+        latency: {threshold_ms: 2000}
+      # Sample 10% of remaining normal traces for baseline visibility
+      - name: probabilistic-catchall
+        type: probabilistic
+        probabilistic: {sampling_percentage: 10}
+
+  # Redact PII patterns (SSN, credit cards, emails) from all telemetry
+  redaction:
+    allow_all_keys: true
+    blocked_values:
+      - "\\b[0-9]{3}-[0-9]{2}-[0-9]{4}\\b"                              # SSN
+      - "\\b[0-9]{16}\\b"                                                 # Credit card (simple)
+      - "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"        # Email
+
+  # Batch telemetry for efficient network usage - MUST be last processor
+  batch:
+    send_batch_size: 8192
+    timeout: 5s
+    send_batch_max_size: 16384
+
+# ── Exporters ──────────────────────────────────────────────────────────────
+exporters:
+  # Splunk HEC - for logs and metrics via HTTP Event Collector
+  splunk_hec:
+    token: ${SPLUNK_HEC_TOKEN}
+    endpoint: ${SPLUNK_HEC_ENDPOINT}
+    source: otel
+    sourcetype: otel
+    index: main
+
+  # Splunk Observability Cloud - for traces via OTLP HTTP
+  otlphttp/splunk:
+    endpoint: https://ingest.${SPLUNK_O11Y_REALM}.signalfx.com
+    headers:
+      X-SF-TOKEN: ${SPLUNK_O11Y_TOKEN}
+
+# ── Extensions ─────────────────────────────────────────────────────────────
+extensions:
+  # Health check endpoint for load balancer health probes
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance profiling endpoint (disable in locked-down environments)
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+# ── Service ────────────────────────────────────────────────────────────────
+service:
+  extensions: [health_check, pprof]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors:
+        - memory_limiter           # 1. Back-pressure protection
+        - resourcedetection/system # 2. System resource enrichment
+        - filter/traces            # 3. Drop health check spans
+        - filter/traces-noisy      # 4. Drop static asset spans
+        - transform/traces-cost    # 5. Strip high-cardinality attributes
+        - tail_sampling/composite  # 6. Keep errors + slow + 10% sample
+        - redaction                # 7. Scrub PII
+        - batch                    # 8. Batch for export (always last)
+      exporters: [otlphttp/splunk]
+    metrics:
+      receivers: [otlp, hostmetrics]
+      processors:
+        - memory_limiter           # 1. Back-pressure protection
+        - resourcedetection/system # 2. System resource enrichment
+        - redaction                # 3. Scrub PII
+        - batch                    # 4. Batch for export (always last)
+      exporters: [splunk_hec]
+    logs:
+      receivers: [otlp, filelog]
+      processors:
+        - memory_limiter           # 1. Back-pressure protection
+        - resourcedetection/system # 2. System resource enrichment
+        - filter/logs-severity     # 3. Drop below WARN severity
+        - filter/logs              # 4. Drop health check logs
+        - redaction                # 5. Scrub PII
+        - batch                    # 6. Batch for export (always last)
+      exporters: [splunk_hec]

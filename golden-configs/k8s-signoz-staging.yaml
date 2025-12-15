@@ -1,0 +1,206 @@
+# ============================================================================
+# OllyStack Golden Config: Generic Kubernetes + SigNoz Self-Hosted (Staging)
+# ============================================================================
+# Platform:     Generic Kubernetes
+# Backend:      SigNoz Self-Hosted
+# Environment:  Staging (balanced filtering, 30-50% reduction)
+# Cost Profile: Moderate (~30-50% volume reduction)
+# Signals:      Traces + Metrics + Logs
+#
+# Prerequisites:
+#   - SIGNOZ_ENDPOINT    : SigNoz gRPC endpoint (e.g., signoz-otel-collector.observability:4317)
+#   - K8S_NODE_NAME      : Kubernetes node name (set via downward API)
+#
+# Deploy:
+#   otelcol --config golden-configs/k8s-signoz-staging.yaml
+# ============================================================================
+
+# ── Receivers ──────────────────────────────────────────────────────────────
+# Ingest telemetry from applications and infrastructure
+receivers:
+  # OpenTelemetry Protocol - primary application telemetry ingestion
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Host-level metrics from the underlying nodes
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+      load: {}
+
+  # Kubernetes cluster-level metrics (deployments, nodes, pods)
+  k8s_cluster:
+    collection_interval: 30s
+    node_conditions_to_report: [Ready, MemoryPressure, DiskPressure]
+    allocatable_types_to_report: [cpu, memory]
+
+  # Kubelet stats for container/pod/node resource usage
+  kubeletstats:
+    collection_interval: 30s
+    auth_type: serviceAccount
+    endpoint: "https://${env:K8S_NODE_NAME}:10250"
+    insecure_skip_verify: true
+    metric_groups: [container, pod, node]
+
+# ── Processors ─────────────────────────────────────────────────────────────
+# Order: memory_limiter (first) -> enrichment -> filtering -> sampling -> batch (last)
+# Staging: balanced filtering - keep INFO+ logs, 50% trace sampling
+processors:
+  # Back-pressure safety valve - MUST be first processor in every pipeline
+  # Prevents OOM kills by refusing data when memory usage is high
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Enrich telemetry with Kubernetes metadata (pod name, namespace, labels)
+  k8sattributes:
+    auth_type: serviceAccount
+    passthrough: false
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.deployment.name
+        - k8s.statefulset.name
+        - k8s.daemonset.name
+        - k8s.cronjob.name
+        - k8s.job.name
+        - k8s.node.name
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.pod.start_time
+      labels:
+        - tag_name: app
+          key: app
+          from: pod
+        - tag_name: version
+          key: version
+          from: pod
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.ip
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.uid
+      - sources:
+          - from: connection
+
+  # Drop logs below INFO severity - staging keeps INFO and above
+  # Moderate cost reduction: drops DEBUG/TRACE logs (~20-30% reduction)
+  filter/logs-severity:
+    logs:
+      log_record:
+        - severity_number < SEVERITY_NUMBER_INFO
+
+  # Drop health/readiness/liveness probe logs that are not warnings or errors
+  filter/logs:
+    logs:
+      log_record:
+        - IsMatch(body, ".*health.*") and severity_number < SEVERITY_NUMBER_WARN
+        - IsMatch(body, ".*readiness.*") and severity_number < SEVERITY_NUMBER_WARN
+        - IsMatch(body, ".*liveness.*") and severity_number < SEVERITY_NUMBER_WARN
+
+  # Drop traces for health check and infrastructure endpoints
+  filter/traces:
+    traces:
+      span:
+        - attributes["http.route"] == "/health"
+        - attributes["http.route"] == "/healthz"
+        - attributes["http.route"] == "/ready"
+        - attributes["http.route"] == "/readyz"
+        - attributes["http.route"] == "/livez"
+        - attributes["http.route"] == "/metrics"
+
+  # Drop traces for noisy static asset requests and CORS preflight
+  filter/traces-noisy:
+    traces:
+      span:
+        - attributes["http.route"] == "/favicon.ico"
+        - attributes["http.method"] == "OPTIONS"
+        - IsMatch(attributes["http.route"], ".*\\.(css|js|png|jpg|gif|svg|ico|woff|woff2)$")
+
+  # Drop noisy/low-value metrics to reduce cardinality
+  filter/metrics-cardinality:
+    metrics:
+      metric:
+        - name == "process.runtime.cpython.gc_count"
+
+  # Head-based probabilistic sampling - keep 50% of traces in staging
+  # Staging gets more traces than production for debugging, but not 100%
+  probabilistic_sampler:
+    sampling_percentage: 50
+
+  # Batch telemetry for efficient network usage - MUST be last processor
+  batch:
+    send_batch_size: 8192
+    timeout: 5s
+    send_batch_max_size: 16384
+
+# ── Exporters ──────────────────────────────────────────────────────────────
+exporters:
+  # SigNoz - all-in-one observability platform via OTLP gRPC
+  otlp/signoz:
+    endpoint: ${SIGNOZ_ENDPOINT}
+    tls:
+      insecure: true
+
+# ── Extensions ─────────────────────────────────────────────────────────────
+extensions:
+  # Health check endpoint for Kubernetes liveness/readiness probes
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance profiling endpoint
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # Debug pages for pipeline visualization
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+# ── Service ────────────────────────────────────────────────────────────────
+service:
+  extensions: [health_check, pprof, zpages]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors:
+        - memory_limiter         # 1. Back-pressure protection
+        - k8sattributes          # 2. Kubernetes metadata enrichment
+        - filter/traces          # 3. Drop health check spans
+        - filter/traces-noisy    # 4. Drop static asset spans
+        - probabilistic_sampler  # 5. Sample 50% of traces
+        - batch                  # 6. Batch for export (always last)
+      exporters: [otlp/signoz]
+    metrics:
+      receivers: [otlp, hostmetrics, k8s_cluster, kubeletstats]
+      processors:
+        - memory_limiter         # 1. Back-pressure protection
+        - k8sattributes          # 2. Kubernetes metadata enrichment
+        - filter/metrics-cardinality # 3. Drop noisy metrics
+        - batch                  # 4. Batch for export (always last)
+      exporters: [otlp/signoz]
+    logs:
+      receivers: [otlp]
+      processors:
+        - memory_limiter         # 1. Back-pressure protection
+        - k8sattributes          # 2. Kubernetes metadata enrichment
+        - filter/logs-severity   # 3. Drop below INFO severity
+        - filter/logs            # 4. Drop health check logs
+        - batch                  # 5. Batch for export (always last)
+      exporters: [otlp/signoz]
