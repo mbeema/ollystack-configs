@@ -1,0 +1,137 @@
+# =============================================================================
+# Kustomize Overlay - AWS EKS Full Stack Deployment
+# =============================================================================
+# References base Kubernetes manifests and applies AWS-specific patches
+# for IAM roles, node affinity, resource limits, and AWS exporter configs.
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ollystack-aws-eks
+
+namespace: observability
+
+# Base manifests to build upon
+resources:
+  - ../../platforms/kubernetes/base/namespace.yaml
+  - ../../platforms/kubernetes/base/serviceaccount.yaml
+  - ../../platforms/kubernetes/base/clusterrole.yaml
+  - ../../platforms/kubernetes/base/clusterrolebinding.yaml
+  - ../../platforms/kubernetes/base/configmap-agent.yaml
+  - ../../platforms/kubernetes/base/configmap-gateway.yaml
+  - ../../platforms/kubernetes/base/daemonset-agent.yaml
+  - ../../platforms/kubernetes/base/deployment-gateway.yaml
+  - ../../platforms/kubernetes/base/deployment-cluster-receiver.yaml
+  - ../../platforms/kubernetes/base/service-agent.yaml
+  - ../../platforms/kubernetes/base/service-gateway.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/part-of: ollystack
+  ollystack.io/platform: aws-eks
+  ollystack.io/environment: production
+
+# AWS-specific patches
+patches:
+  # Annotate ServiceAccount with IRSA role ARN
+  - target:
+      kind: ServiceAccount
+      name: otel-collector
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          eks.amazonaws.com/role-arn: "${OTEL_COLLECTOR_ROLE_ARN}"
+
+  # Add AWS-specific environment variables to Agent DaemonSet
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: aws-config
+              key: region
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: AWS_STS_REGIONAL_ENDPOINTS
+          value: "regional"
+
+  # Add node affinity for EKS-managed nodes
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: add
+        path: /spec/template/spec/affinity
+        value:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: eks.amazonaws.com/compute-type
+                      operator: NotIn
+                      values:
+                        - fargate
+
+  # Set resource limits for production on Gateway
+  - target:
+      kind: Deployment
+      name: otel-gateway
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+
+  # Set resource limits for Agent DaemonSet
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+  # Gateway HPA for AWS
+  - target:
+      kind: Deployment
+      name: otel-gateway
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+# ConfigMap generator for AWS-specific configuration
+configMapGenerator:
+  - name: aws-config
+    literals:
+      - region=us-west-2
+      - amp_workspace_id=ws-placeholder
+      - cloudwatch_log_group=/ollystack/otel
+
+  - name: otel-agent-config-aws
+    files:
+      - otel-agent-config.yaml=../../platforms/aws/eks/collector-config.yaml
+
+  - name: otel-gateway-config-aws
+    files:
+      - otel-gateway-config.yaml=../../platforms/aws/eks/gateway-config.yaml

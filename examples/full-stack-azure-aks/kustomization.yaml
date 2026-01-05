@@ -1,0 +1,145 @@
+# =============================================================================
+# Kustomize Overlay - Azure AKS Full Stack Deployment
+# =============================================================================
+# References base Kubernetes manifests and applies Azure-specific patches
+# for workload identity, resource limits, and Azure exporter configs.
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ollystack-azure-aks
+
+namespace: observability
+
+# Base manifests
+resources:
+  - ../../platforms/kubernetes/base/namespace.yaml
+  - ../../platforms/kubernetes/base/serviceaccount.yaml
+  - ../../platforms/kubernetes/base/clusterrole.yaml
+  - ../../platforms/kubernetes/base/clusterrolebinding.yaml
+  - ../../platforms/kubernetes/base/configmap-agent.yaml
+  - ../../platforms/kubernetes/base/configmap-gateway.yaml
+  - ../../platforms/kubernetes/base/daemonset-agent.yaml
+  - ../../platforms/kubernetes/base/deployment-gateway.yaml
+  - ../../platforms/kubernetes/base/deployment-cluster-receiver.yaml
+  - ../../platforms/kubernetes/base/service-agent.yaml
+  - ../../platforms/kubernetes/base/service-gateway.yaml
+
+# Common labels
+commonLabels:
+  app.kubernetes.io/part-of: ollystack
+  ollystack.io/platform: azure-aks
+  ollystack.io/environment: production
+
+# Azure-specific patches
+patches:
+  # Annotate ServiceAccount with Azure Workload Identity
+  - target:
+      kind: ServiceAccount
+      name: otel-collector
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          azure.workload.identity/client-id: "${AZURE_CLIENT_ID}"
+      - op: add
+        path: /metadata/labels/azure.workload.identity~1use
+        value: "true"
+
+  # Add Azure workload identity label to Agent pods
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: add
+        path: /spec/template/metadata/labels/azure.workload.identity~1use
+        value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: AZURE_TENANT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: azure-config
+              key: tenant_id
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: APPLICATIONINSIGHTS_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: app-insights-connection-string
+
+  # Add Azure workload identity label to Gateway pods
+  - target:
+      kind: Deployment
+      name: otel-gateway
+    patch: |
+      - op: add
+        path: /spec/template/metadata/labels/azure.workload.identity~1use
+        value: "true"
+
+  # Resource limits for Agent
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+  # Resource limits for Gateway
+  - target:
+      kind: Deployment
+      name: otel-gateway
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+
+  # Gateway replicas
+  - target:
+      kind: Deployment
+      name: otel-gateway
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+# ConfigMap generator for Azure-specific settings
+configMapGenerator:
+  - name: azure-config
+    literals:
+      - tenant_id=placeholder-tenant-id
+      - subscription_id=placeholder-subscription-id
+      - resource_group=ollystack-rg
+      - location=eastus
+      - monitor_workspace_id=placeholder-workspace-id
+
+  - name: otel-agent-config-azure
+    files:
+      - otel-agent-config.yaml=../../platforms/azure/aks/collector-config.yaml
+
+  - name: otel-gateway-config-azure
+    files:
+      - otel-gateway-config.yaml=../../platforms/azure/aks/gateway-config.yaml
+
+# Secrets (reference only - create manually or via external-secrets)
+# kubectl create secret generic azure-secrets \
+#   --from-literal=app-insights-connection-string="InstrumentationKey=..." \
+#   -n observability

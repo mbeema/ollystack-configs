@@ -1,0 +1,137 @@
+# =============================================================================
+# Kustomize Overlay - GCP GKE Full Stack Deployment
+# =============================================================================
+# References base Kubernetes manifests and applies GCP-specific patches
+# for Workload Identity, resource limits, and GCP exporter configs.
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ollystack-gcp-gke
+
+namespace: observability
+
+# Base manifests
+resources:
+  - ../../platforms/kubernetes/base/namespace.yaml
+  - ../../platforms/kubernetes/base/serviceaccount.yaml
+  - ../../platforms/kubernetes/base/clusterrole.yaml
+  - ../../platforms/kubernetes/base/clusterrolebinding.yaml
+  - ../../platforms/kubernetes/base/configmap-agent.yaml
+  - ../../platforms/kubernetes/base/configmap-gateway.yaml
+  - ../../platforms/kubernetes/base/daemonset-agent.yaml
+  - ../../platforms/kubernetes/base/deployment-gateway.yaml
+  - ../../platforms/kubernetes/base/deployment-cluster-receiver.yaml
+  - ../../platforms/kubernetes/base/service-agent.yaml
+  - ../../platforms/kubernetes/base/service-gateway.yaml
+
+# Common labels
+commonLabels:
+  app.kubernetes.io/part-of: ollystack
+  ollystack.io/platform: gcp-gke
+  ollystack.io/environment: production
+
+# GCP-specific patches
+patches:
+  # Annotate ServiceAccount with GCP Workload Identity
+  - target:
+      kind: ServiceAccount
+      name: otel-collector
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          iam.gke.io/gcp-service-account: "otel-collector@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
+
+  # Add GCP environment variables to Agent
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: GCP_PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: gcp-config
+              key: project_id
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: GCP_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: gcp-config
+              key: region
+
+  # Tolerate GKE-specific taints
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: add
+        path: /spec/template/spec/tolerations/-
+        value:
+          key: cloud.google.com/gke-spot
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+
+  # Resource limits for Agent
+  - target:
+      kind: DaemonSet
+      name: otel-agent
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+  # Resource limits for Gateway
+  - target:
+      kind: Deployment
+      name: otel-gateway
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+
+  # Gateway replicas
+  - target:
+      kind: Deployment
+      name: otel-gateway
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+# ConfigMap generator for GCP-specific settings
+configMapGenerator:
+  - name: gcp-config
+    literals:
+      - project_id=placeholder-project-id
+      - region=us-central1
+      - zone=us-central1-a
+      - cluster_name=ollystack-gke
+
+  - name: otel-agent-config-gcp
+    files:
+      - otel-agent-config.yaml=../../platforms/gcp/gke/collector-config.yaml
+
+  - name: otel-gateway-config-gcp
+    files:
+      - otel-gateway-config.yaml=../../platforms/gcp/gke/gateway-config.yaml

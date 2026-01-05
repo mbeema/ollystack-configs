@@ -1,0 +1,284 @@
+# =============================================================================
+# Helm Values - Full Stack GCP GKE Deployment
+# =============================================================================
+# Combined values for deploying OTel Collector on GKE with GCP-native backends.
+# Use with: helm install otel open-telemetry/opentelemetry-collector -f values.yaml
+# =============================================================================
+
+mode: daemonset
+
+namespaceOverride: observability
+
+replicaCount: 2
+
+# =============================================================================
+# Image
+# =============================================================================
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# =============================================================================
+# Service Account with GCP Workload Identity
+# =============================================================================
+serviceAccount:
+  create: true
+  name: otel-collector
+  annotations:
+    iam.gke.io/gcp-service-account: "otel-collector@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
+
+# =============================================================================
+# Cluster Role
+# =============================================================================
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods", "namespaces", "nodes", "nodes/stats", "endpoints"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["apps"]
+      resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["batch"]
+      resources: ["jobs", "cronjobs"]
+      verbs: ["get", "list", "watch"]
+
+# =============================================================================
+# Ports
+# =============================================================================
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  health:
+    enabled: true
+    containerPort: 13133
+    servicePort: 13133
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+
+# =============================================================================
+# Resources
+# =============================================================================
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+# =============================================================================
+# Pod Configuration
+# =============================================================================
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"
+
+tolerations:
+  - operator: Exists
+    effect: NoSchedule
+  - key: cloud.google.com/gke-spot
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+extraEnvs:
+  - name: K8S_NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+  - name: K8S_POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: K8S_POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: GCP_PROJECT_ID
+    value: "${GCP_PROJECT_ID}"
+
+# =============================================================================
+# Volumes
+# =============================================================================
+extraVolumes:
+  - name: hostfs
+    hostPath:
+      path: /
+  - name: varlogpods
+    hostPath:
+      path: /var/log/pods
+  - name: varlibdockercontainers
+    hostPath:
+      path: /var/lib/docker/containers
+
+extraVolumeMounts:
+  - name: hostfs
+    mountPath: /hostfs
+    readOnly: true
+    mountPropagation: HostToContainer
+  - name: varlogpods
+    mountPath: /var/log/pods
+    readOnly: true
+  - name: varlibdockercontainers
+    mountPath: /var/lib/docker/containers
+    readOnly: true
+
+# =============================================================================
+# Collector Configuration
+# =============================================================================
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+    k8s_cluster:
+      collection_interval: 30s
+      node_conditions_to_report:
+        - Ready
+        - MemoryPressure
+        - DiskPressure
+
+    hostmetrics:
+      root_path: /hostfs
+      collection_interval: 30s
+      scrapers:
+        cpu:
+          metrics:
+            system.cpu.utilization:
+              enabled: true
+        memory:
+          metrics:
+            system.memory.utilization:
+              enabled: true
+        disk: {}
+        filesystem: {}
+        load: {}
+        network: {}
+
+    filelog:
+      include:
+        - /var/log/pods/*/*/*.log
+      exclude:
+        - /var/log/pods/*/otc-container/*.log
+      start_at: end
+      include_file_path: true
+
+  processors:
+    batch:
+      send_batch_size: 1024
+      timeout: 5s
+
+    memory_limiter:
+      check_interval: 5s
+      limit_mib: 800
+      spike_limit_mib: 200
+
+    k8sattributes:
+      auth_type: serviceAccount
+      extract:
+        metadata:
+          - k8s.namespace.name
+          - k8s.deployment.name
+          - k8s.statefulset.name
+          - k8s.daemonset.name
+          - k8s.node.name
+          - k8s.pod.name
+          - k8s.pod.uid
+      pod_association:
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+        - sources:
+            - from: connection
+
+    resourcedetection:
+      detectors: [env, gcp]
+      timeout: 5s
+      override: false
+      gcp:
+        resource_attributes:
+          cloud.account.id:
+            enabled: true
+          cloud.availability_zone:
+            enabled: true
+          cloud.region:
+            enabled: true
+          cloud.platform:
+            enabled: true
+          host.id:
+            enabled: true
+          host.name:
+            enabled: true
+          host.type:
+            enabled: true
+          k8s.cluster.name:
+            enabled: true
+
+  exporters:
+    # Google Cloud Trace
+    googlecloud:
+      project: "${GCP_PROJECT_ID}"
+      trace:
+        attribute_mappings:
+          - key: service.name
+            replacement: g.co/r/service/name
+
+    # Google Cloud Monitoring (metrics)
+    googlemanagedprometheus:
+      project: "${GCP_PROJECT_ID}"
+
+    # Google Cloud Logging
+    googlecloudlogging:
+      project: "${GCP_PROJECT_ID}"
+      log_name: "otel-collector"
+
+    # Debug exporter
+    debug:
+      verbosity: basic
+
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+
+  service:
+    extensions: [health_check]
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+        exporters: [googlecloud, debug]
+      metrics:
+        receivers: [otlp, hostmetrics, k8s_cluster]
+        processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+        exporters: [googlemanagedprometheus, debug]
+      logs:
+        receivers: [otlp, filelog]
+        processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+        exporters: [googlecloudlogging, debug]
+    telemetry:
+      logs:
+        level: info
+      metrics:
+        level: detailed
+        address: 0.0.0.0:8888
