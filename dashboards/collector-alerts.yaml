@@ -18,7 +18,7 @@ spec:
           annotations:
             summary: "OTel Collector memory usage above 80%"
             description: "Collector {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}. Consider increasing memory limits or scaling horizontally."
-            runbook_url: "https://github.com/your-org/ollystack/blob/main/docs/runbooks/collector-high-memory.md"
+            runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/collector-high-memory.md"
 
         - alert: CollectorExporterFailures
           expr: rate(otelcol_exporter_send_failed_spans{job="otel-collector"}[5m]) + rate(otelcol_exporter_send_failed_metric_points{job="otel-collector"}[5m]) + rate(otelcol_exporter_send_failed_log_records{job="otel-collector"}[5m]) > 0
@@ -28,7 +28,7 @@ spec:
           annotations:
             summary: "OTel Collector exporter send failures"
             description: "Collector {{ $labels.instance }} exporter {{ $labels.exporter }} is failing to send data. Check backend connectivity and authentication."
-            runbook_url: "https://github.com/your-org/ollystack/blob/main/docs/runbooks/collector-dropping-data.md"
+            runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/collector-dropping-data.md"
 
         - alert: CollectorDroppingData
           expr: otelcol_exporter_queue_size{job="otel-collector"} >= otelcol_exporter_queue_capacity{job="otel-collector"}
@@ -38,7 +38,7 @@ spec:
           annotations:
             summary: "OTel Collector exporter queue full - dropping data"
             description: "Collector {{ $labels.instance }} exporter {{ $labels.exporter }} queue is full. Data is being dropped."
-            runbook_url: "https://github.com/your-org/ollystack/blob/main/docs/runbooks/collector-dropping-data.md"
+            runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/collector-dropping-data.md"
 
         - alert: CollectorHighCPU
           expr: rate(otelcol_process_cpu_seconds{job="otel-collector"}[5m]) > 0.80
@@ -48,7 +48,7 @@ spec:
           annotations:
             summary: "OTel Collector sustained high CPU usage"
             description: "Collector {{ $labels.instance }} CPU usage is {{ $value | humanizePercentage }} for over 10 minutes."
-            runbook_url: "https://github.com/your-org/ollystack/blob/main/docs/runbooks/collector-high-cpu.md"
+            runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/collector-high-cpu.md"
 
         - alert: CollectorReceiverRefused
           expr: rate(otelcol_receiver_refused_spans{job="otel-collector"}[5m]) > 0 or rate(otelcol_receiver_refused_metric_points{job="otel-collector"}[5m]) > 0 or rate(otelcol_receiver_refused_log_records{job="otel-collector"}[5m]) > 0
@@ -58,7 +58,7 @@ spec:
           annotations:
             summary: "OTel Collector receiver refusing data"
             description: "Collector {{ $labels.instance }} receiver {{ $labels.receiver }} is refusing data due to back-pressure."
-            runbook_url: "https://github.com/your-org/ollystack/blob/main/docs/runbooks/collector-high-memory.md"
+            runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/collector-high-memory.md"
 
         - alert: CollectorExporterQueueNearFull
           expr: otelcol_exporter_queue_size{job="otel-collector"} / otelcol_exporter_queue_capacity{job="otel-collector"} > 0.75
@@ -68,4 +68,4 @@ spec:
           annotations:
             summary: "OTel Collector exporter queue above 75%"
             description: "Collector {{ $labels.instance }} exporter {{ $labels.exporter }} queue utilization is {{ $value | humanizePercentage }}. Consider scaling or increasing queue capacity."
-            runbook_url: "https://github.com/your-org/ollystack/blob/main/docs/runbooks/scaling-collectors.md"
+            runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/scaling-collectors.md"
