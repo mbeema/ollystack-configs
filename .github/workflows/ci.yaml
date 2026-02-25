@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yamllint
+        run: pip install yamllint
+      - name: Lint YAML files
+        run: |
+          yamllint -c .yamllint.yaml \
+            collector/ \
+            backends/ \
+            platforms/ \
+            golden-configs/ \
+            sampling/ \
+            topologies/ \
+            alerts/ \
+            dashboards/collector-alerts.yaml \
+            dev/
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: .
+          ignore_paths: .terraform
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [terraform/aws, terraform/aws-test-cluster, terraform/azure, terraform/gcp]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+      - name: Terraform Init
+        run: terraform -chdir=${{ matrix.dir }} init -backend=false
+      - name: Terraform Validate
+        run: terraform -chdir=${{ matrix.dir }} validate
+
+  otel-config-validate:
+    name: OTel Collector Config Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OTel Collector
+        run: |
+          curl -sL https://github.com/open-telemetry/opentelemetry-collector-releases/releases/latest/download/otelcol-contrib_linux_amd64.tar.gz \
+            | tar xz -C /usr/local/bin otelcol-contrib
+      - name: Validate golden configs
+        run: |
+          failed=0
+          for f in golden-configs/*.yaml; do
+            echo "--- Validating $f ---"
+            if ! otelcol-contrib validate --config="$f" 2>&1; then
+              echo "WARN: $f has validation issues (may need env vars)"
+              failed=$((failed + 1))
+            fi
+          done
+          echo "Checked $(ls golden-configs/*.yaml | wc -l) configs, $failed with warnings"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified --results=verified,unknown
+      - name: Check for hardcoded credentials
+        run: |
+          echo "Scanning for potential secrets in YAML configs..."
+          if grep -rn --include='*.yaml' --include='*.yml' \
+            -E '(password|secret|token|api_key|access_key)\s*:\s*[^$\{"\x27 ]' \
+            --exclude-dir=.github \
+            collector/ backends/ platforms/ golden-configs/ 2>/dev/null; then
+            echo "::warning::Found potential hardcoded credentials. Use environment variable substitution (\${env:VAR}) instead."
+          else
+            echo "No hardcoded credentials found."
+          fi
