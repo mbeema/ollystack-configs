@@ -26,21 +26,33 @@ processors:
 
           # ── HIPAA §164.312: Technical Safeguards ──
           # Tag PHI access, audit controls, and transmission security
-          - set(attributes["compliance.framework"], "HIPAA") where IsMatch(body, "(?i)(patient|medical|health.record|phi|hipaa|ehr|dicom|hl7|fhir|prescription|diagnosis)") and attributes["compliance.framework"] == nil
+          - >-
+            set(attributes["compliance.framework"], "HIPAA")
+            where IsMatch(body, "(?i)(patient|medical|health.record|phi|hipaa|ehr|dicom|hl7|fhir|prescription|diagnosis)")
+            and attributes["compliance.framework"] == nil
           - set(attributes["compliance.retention_days"], "2190") where attributes["compliance.framework"] == "HIPAA"
           - set(attributes["compliance.requirement"], "164.312") where attributes["compliance.framework"] == "HIPAA"
 
           # ── SOX Section 404: Financial Controls ──
-          - set(attributes["compliance.framework"], "SOX") where IsMatch(body, "(?i)(financial|ledger|journal.entry|invoice|accounts.(payable|receivable)|audit.trail|fiscal|revenue|expense)") and attributes["compliance.framework"] == nil
+          - >-
+            set(attributes["compliance.framework"], "SOX")
+            where IsMatch(body, "(?i)(financial|ledger|journal.entry|invoice|accounts.(payable|receivable)|audit.trail|fiscal|revenue|expense)")
+            and attributes["compliance.framework"] == nil
           - set(attributes["compliance.retention_days"], "2555") where attributes["compliance.framework"] == "SOX"
           - set(attributes["compliance.requirement"], "Sec-404") where attributes["compliance.framework"] == "SOX"
 
           # ── SOC 2 CC6/CC7: Logical Access and System Operations ──
-          - set(attributes["compliance.framework"], "SOC2") where IsMatch(body, "(?i)(access.control|user.(creat|delet|modif|disabl)|role.(assign|revoke)|mfa|privilege|permission.(change|grant))") and attributes["compliance.framework"] == nil
+          - >-
+            set(attributes["compliance.framework"], "SOC2")
+            where IsMatch(body, "(?i)(access.control|user.(creat|delet|modif|disabl)|role.(assign|revoke)|mfa|privilege|permission.(change|grant))")
+            and attributes["compliance.framework"] == nil
           - set(attributes["compliance.retention_days"], "365") where attributes["compliance.framework"] == "SOC2"
 
           # ── GDPR Article 30: Records of Processing Activities ──
-          - set(attributes["compliance.framework"], "GDPR") where IsMatch(body, "(?i)(personal.data|data.subject|consent|right.to.(erasure|access|portability)|dpo|data.protection|gdpr|processing.activit)") and attributes["compliance.framework"] == nil
+          - >-
+            set(attributes["compliance.framework"], "GDPR")
+            where IsMatch(body, "(?i)(personal.data|data.subject|consent|right.to.(erasure|access|portability)|dpo|data.protection|gdpr|processing.activit)")
+            and attributes["compliance.framework"] == nil
           - set(attributes["compliance.retention_days"], "1095") where attributes["compliance.framework"] == "GDPR"
 
           # ── General Audit: Mark all compliance-tagged logs as audit-required ──

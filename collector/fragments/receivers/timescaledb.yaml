@@ -52,7 +52,13 @@ receivers:
   # TimescaleDB-specific metrics via SQL queries
   sqlquery/timescaledb:
     driver: postgres
-    datasource: "host=${TIMESCALEDB_HOST:-localhost} port=${TIMESCALEDB_PORT:-5432} user=${TIMESCALEDB_USERNAME:-postgres} password=${TIMESCALEDB_PASSWORD} dbname=${TIMESCALEDB_DATABASE:-tsdb} sslmode=${TIMESCALEDB_SSL_MODE:-disable}"
+    datasource: >-
+      host=${TIMESCALEDB_HOST:-localhost}
+      port=${TIMESCALEDB_PORT:-5432}
+      user=${TIMESCALEDB_USERNAME:-postgres}
+      password=${TIMESCALEDB_PASSWORD}
+      dbname=${TIMESCALEDB_DATABASE:-tsdb}
+      sslmode=${TIMESCALEDB_SSL_MODE:-disable}
     collection_interval: ${TIMESCALEDB_INTERVAL:-60s}
     queries:
       # Hypertable sizes and chunk counts

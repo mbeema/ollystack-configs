@@ -115,7 +115,8 @@ log_info() {
 is_fragment() {
   local file="$1"
   for pattern in "${FRAGMENT_PATTERNS[@]}"; do
-    # Use bash pattern matching
+    # Use bash pattern matching (glob is intentional)
+    # shellcheck disable=SC2053
     if [[ "$file" == $pattern ]]; then
       return 0
     fi
@@ -253,8 +254,7 @@ echo " OllyStack - Configuration Validator"
 echo "=============================================="
 echo ""
 
-HAS_OTELCOL=true
-check_otelcol || HAS_OTELCOL=false
+check_otelcol || true
 echo ""
 
 # Collect all YAML files from scan directories
@@ -284,7 +284,7 @@ echo ""
 # Validate each file
 for config_file in "${CONFIG_FILES[@]}"; do
   # Make path relative for display
-  relative_path="${config_file#${PROJECT_ROOT}/}"
+  relative_path="${config_file#"${PROJECT_ROOT}"/}"
 
   # Check if this is a fragment
   if is_fragment "$config_file"; then

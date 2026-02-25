@@ -116,12 +116,11 @@ Resources:
                 - logs:PutLogEvents
               Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
       Tracing: Active
-      VpcConfig:
-        !If
-          - HasVpcConfig
-          - SubnetIds: !Ref LambdaSubnetIds
-            SecurityGroupIds: !Ref LambdaSecurityGroupIds
-          - !Ref AWS::NoValue
+      VpcConfig: !If
+        - HasVpcConfig
+        - SubnetIds: !Ref LambdaSubnetIds
+          SecurityGroupIds: !Ref LambdaSecurityGroupIds
+        - !Ref AWS::NoValue
       Tags:
         Platform: aws
         Service: lambda

@@ -132,6 +132,10 @@ processors:
         value: ${OTEL_SERVICE_NAME:-ec2-host-agent}
         action: upsert
 
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 exporters:
   otlp:
     endpoint: ${OTEL_GATEWAY_ENDPOINT}
@@ -195,7 +199,3 @@ service:
         - batch
       exporters:
         - otlp
-
-  extensions:
-    health_check:
-      endpoint: 0.0.0.0:13133

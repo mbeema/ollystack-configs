@@ -78,6 +78,7 @@ render() {
   local file="$1"
   # Only substitute variables we explicitly export; leave ${env:...} OTel
   # references and $(...) alone. envsubst with a variable list is safest.
+  # shellcheck disable=SC2016
   envsubst '${OTEL_NAMESPACE} ${OTEL_COLLECTOR_IMAGE} ${OTEL_COLLECTOR_VERSION}
     ${BACKEND_OTLP_ENDPOINT} ${K8S_CLUSTER_NAME} ${DEPLOYMENT_ENVIRONMENT}
     ${OTEL_LOG_LEVEL} ${GATEWAY_REPLICAS} ${GATEWAY_HPA_MIN_REPLICAS}
@@ -120,22 +121,11 @@ metadata:
     app.kubernetes.io/part-of: opentelemetry
 data:
   config.yaml: |
-$(echo "$config_content" | sed 's/^/    /')
+$(echo "${config_content}" | while IFS= read -r line; do echo "    ${line}"; done)
 EOF
 }
 
 # ── Apply order ──────────────────────────────────────────────────────────────
-MANIFESTS=(
-  "${K8S_DIR}/agent/namespace.yaml"
-  "${K8S_DIR}/agent/serviceaccount.yaml"
-  "${K8S_DIR}/agent/configmap.yaml"
-  "${K8S_DIR}/agent/daemonset.yaml"
-  "${K8S_DIR}/gateway/deployment.yaml"
-  "${K8S_DIR}/gateway/service.yaml"
-  "${K8S_DIR}/gateway/hpa.yaml"
-  "${K8S_DIR}/gateway/pdb.yaml"
-  "${K8S_DIR}/cluster-receiver/deployment.yaml"
-)
 
 # ── Deploy ───────────────────────────────────────────────────────────────────
 do_deploy() {

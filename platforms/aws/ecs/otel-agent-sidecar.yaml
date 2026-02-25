@@ -44,6 +44,10 @@ processors:
         value: ${SERVICE_VERSION:-unknown}
         action: upsert
 
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 exporters:
   otlp:
     endpoint: ${OTEL_GATEWAY_ENDPOINT}
@@ -103,7 +107,3 @@ service:
         - batch
       exporters:
         - otlp
-
-  extensions:
-    health_check:
-      endpoint: 0.0.0.0:13133

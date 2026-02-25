@@ -133,16 +133,13 @@ detect_os() {
     case "$OS_ID" in
         ubuntu|debian)
             PKG_TYPE="deb"
-            PKG_MANAGER="dpkg"
             ;;
         rhel|centos|rocky|alma|fedora|ol)
             PKG_TYPE="rpm"
-            PKG_MANAGER="rpm"
             ;;
         *)
             log_warn "Unsupported OS: $OS_ID. Attempting binary installation."
             PKG_TYPE="tar"
-            PKG_MANAGER="tar"
             ;;
     esac
 

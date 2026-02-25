@@ -151,6 +151,12 @@ processors:
     limit_mib: ${MEMORY_LIMITER_LIMIT_MIB:-512}
     spike_limit_mib: ${MEMORY_LIMITER_SPIKE_MIB:-128}
 
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  zpages:
+    endpoint: 0.0.0.0:55679
+
 exporters:
   otlp:
     endpoint: ${OTEL_GATEWAY_ENDPOINT:-otel-gateway.observability.svc.cluster.local:4317}
@@ -213,9 +219,3 @@ service:
   extensions:
     - health_check
     - zpages
-
-  extensions:
-    health_check:
-      endpoint: 0.0.0.0:13133
-    zpages:
-      endpoint: 0.0.0.0:55679
