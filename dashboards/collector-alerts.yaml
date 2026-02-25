@@ -21,7 +21,10 @@ spec:
             runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/collector-high-memory.md"
 
         - alert: CollectorExporterFailures
-          expr: rate(otelcol_exporter_send_failed_spans{job="otel-collector"}[5m]) + rate(otelcol_exporter_send_failed_metric_points{job="otel-collector"}[5m]) + rate(otelcol_exporter_send_failed_log_records{job="otel-collector"}[5m]) > 0
+          expr: >-
+            rate(otelcol_exporter_send_failed_spans{job="otel-collector"}[5m])
+            + rate(otelcol_exporter_send_failed_metric_points{job="otel-collector"}[5m])
+            + rate(otelcol_exporter_send_failed_log_records{job="otel-collector"}[5m]) > 0
           for: 5m
           labels:
             severity: warning
@@ -51,7 +54,10 @@ spec:
             runbook_url: "https://github.com/mbeema/ollystack-configs/blob/main/docs/runbooks/collector-high-cpu.md"
 
         - alert: CollectorReceiverRefused
-          expr: rate(otelcol_receiver_refused_spans{job="otel-collector"}[5m]) > 0 or rate(otelcol_receiver_refused_metric_points{job="otel-collector"}[5m]) > 0 or rate(otelcol_receiver_refused_log_records{job="otel-collector"}[5m]) > 0
+          expr: >-
+            rate(otelcol_receiver_refused_spans{job="otel-collector"}[5m]) > 0
+            or rate(otelcol_receiver_refused_metric_points{job="otel-collector"}[5m]) > 0
+            or rate(otelcol_receiver_refused_log_records{job="otel-collector"}[5m]) > 0
           for: 5m
           labels:
             severity: warning
